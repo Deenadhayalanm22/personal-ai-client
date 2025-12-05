@@ -2,7 +2,7 @@
     let backendResponse = "";
 
     async function callBackend() {
-        const res = await fetch("https://personal-ai-sacu.onrender.com/transaction");
+        const res = await fetch("https://personal-ai-sacu.onrender.com/expenses");
         backendResponse = await res.text();
     }
 </script>

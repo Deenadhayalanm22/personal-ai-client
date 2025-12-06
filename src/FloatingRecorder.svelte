@@ -14,6 +14,12 @@
   let saved = null;
   const dispatch = createEventDispatcher();
 
+  // drag-to-close state
+  let dragging = false;
+  let dragStartY = 0;
+  let dragTranslate = 0; // pixels
+  const DRAG_CLOSE_THRESHOLD = 120; // pixels to drag down to close
+
   // gesture helpers
   let pressTimer = null;
   let lastTap = 0;
@@ -61,6 +67,44 @@
     visible = !visible;
     error = '';
     success = '';
+  }
+
+  function closePanel() {
+    visible = false;
+    dragging = false;
+    dragTranslate = 0;
+    error = '';
+    success = '';
+  }
+
+  function onPointerDown(e) {
+    // only start drag if pointer is on panel area and visible
+    if (!visible) return;
+    dragging = true;
+    dragStartY = (e.touches ? e.touches[0].clientY : e.clientY);
+    dragTranslate = 0;
+    // capture pointer for mouse events
+    try { e.target.setPointerCapture && e.target.setPointerCapture(e.pointerId); } catch(e){}
+  }
+
+  function onPointerMove(e) {
+    if (!dragging) return;
+    const y = (e.touches ? e.touches[0].clientY : e.clientY);
+    dragTranslate = Math.max(0, y - dragStartY);
+  }
+
+  function onPointerUp(e) {
+    if (!dragging) return;
+    dragging = false;
+    // close if dragged enough
+    if (dragTranslate > DRAG_CLOSE_THRESHOLD) {
+      visible = false;
+      dragTranslate = 0;
+    } else {
+      // snap back
+      dragTranslate = 0;
+    }
+    try { e.target.releasePointerCapture && e.target.releasePointerCapture(e.pointerId); } catch(e){}
   }
 
   function toggleRecording() {
@@ -136,8 +180,8 @@
   .floating {
     position: fixed;
     right: 18px;
-    bottom: 18px;
-    z-index: 2000;
+    bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+    z-index: 3000;
   }
 
   .fab {
@@ -146,6 +190,7 @@
     box-shadow: 0 12px 30px rgba(38,44,77,0.45);
     display:flex; align-items:center; justify-content:center; padding:0; line-height:1; text-align:center;
     -webkit-tap-highlight-color: transparent;
+    z-index: 3001;
   }
 
   .panel {
@@ -153,16 +198,26 @@
     left: 0; right: 0; bottom: 0;
     background: linear-gradient(180deg, rgba(10,10,12,0.98), rgba(8,8,10,0.99));
     border-top-left-radius: 12px; border-top-right-radius: 12px;
-    padding: 1rem; box-shadow: 0 -12px 40px rgba(2,6,23,0.6);
+    padding: 1rem 1rem calc(1rem + env(safe-area-inset-bottom, 0px)); box-shadow: 0 -12px 40px rgba(2,6,23,0.6);
     transform: translateY(0);
+    z-index: 2000;
+    box-sizing: border-box;
+    max-height: calc(100vh - 120px);
+    overflow: auto;
   }
 
   .panel.hidden { transform: translateY(120%); }
 
-  .panel-inner { max-width:900px; margin: 0 auto; display:flex; gap:1rem; align-items:flex-start; }
+  .panel-inner { max-width:900px; margin: 0 auto; display:flex; gap:1rem; align-items:flex-start; flex-wrap:wrap; }
 
   .panel-left { display:flex; flex-direction:column; align-items:center; gap:.6rem; width:140px; }
   .panel-mid { flex:1; }
+
+  .close-inline {
+    background: transparent; color: #fff; border: none; font-size:18px; cursor: pointer;
+    padding:6px 10px; border-radius:8px; touch-action: manipulation;
+    display:inline-flex; align-items:center; justify-content:center; margin-left:8px;
+  }
 
   .capture { padding:.6rem 1rem; border-radius:10px; background: linear-gradient(90deg,#ff7eb3,#65d6ff); border:none; color:#fff; font-weight:700; }
   .send { padding:.5rem .9rem; border-radius:10px; background:#667eea; color:#fff; border:none; font-weight:700; }
@@ -176,18 +231,25 @@
 <div class="floating">
   <button
     class="fab"
-    on:click={togglePanel}
     on:touchstart|preventDefault={startPress}
     on:touchend={endPress}
     on:mousedown={startPress}
     on:mouseup={endPress}
     on:mouseleave={cancelPress}
-    on:click|stopPropagation={togglePanel}
+    on:click={togglePanel}
     on:dblclick|preventDefault={handleDoubleTap}
     aria-expanded={visible}
   >{visible ? '✕' : '🎤'}</button>
   {#if visible}
-    <div class="panel" role="dialog" aria-modal="true">
+    <div class="panel" role="dialog" aria-modal="true"
+      on:touchstart|passive={onPointerDown}
+      on:touchmove|passive={onPointerMove}
+      on:touchend={onPointerUp}
+      on:mousedown={onPointerDown}
+      on:mousemove={onPointerMove}
+      on:mouseup={onPointerUp}
+      style="transform: translateY({dragTranslate}px); transition: {dragging ? 'none' : 'transform 180ms ease-out'}"
+    >
       <div class="panel-inner">
         <div class="panel-left">
           <button class="fab" on:click={toggleRecording} class:recording={recording}>{recording ? '⏹' : '🎙'}</button>
@@ -197,9 +259,10 @@
         </div>
 
         <div class="panel-mid">
-          <div style="display:flex; gap: .5rem; align-items:center; justify-content:space-between;">
-            <div style="font-weight:700; color:#fff">Quick Record</div>
-            <div style="color:#9aa3d6; font-size:.9rem">{success ? success : ''}</div>
+          <div style="display:flex; gap: .5rem; align-items:center; justify-content:flex-start;">
+            <div style="flex:1"></div>
+            <div style="color:#9aa3d6; font-size:.9rem; margin-left:8px">{success ? success : ''}</div>
+            <button class="close-inline" aria-label="Close" on:click={closePanel}>✕</button>
           </div>
           <textarea bind:value={text} placeholder="Captured transcription appears here..."></textarea>
           {#if error}

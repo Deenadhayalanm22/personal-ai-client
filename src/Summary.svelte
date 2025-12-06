@@ -74,6 +74,8 @@
     border-radius: 8px;
   }
 
+  /* keep single-column summary styling (chart + tiles) */
+
   .grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -116,8 +118,8 @@
           <text x="100" y="116" text-anchor="middle" fill="#baf0bd" font-size="14" font-weight="700">{Object.values(summary).reduce((s,v)=>s+Number(v||0),0)}</text>
         </svg>
 
-        <!-- legend -->
-        <div style="width:100%;">
+  <!-- legend -->
+  <div style="width:100%;">
           {#each chartData as slice}
             <div style="display:flex; justify-content:space-between; gap:.6rem; padding:.25rem 0; align-items:center;">
               <div style="display:flex; gap:.6rem; align-items:center;">
@@ -128,9 +130,9 @@
             </div>
           {/each}
         </div>
-      </div>
+  </div>
 
-      <div style="flex:1">
+  <div style="flex:1">
         <div class="grid" role="list">
           {#each Object.entries(summary) as [category, total]}
             <div class="tile" role="listitem">

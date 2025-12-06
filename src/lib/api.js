@@ -14,3 +14,13 @@ export async function getCurrentMonthSummary() {
   const res = await fetch(`${BASE}/api/expense/summary/current-month`);
   return res;
 }
+
+export async function getRecentExpenses() {
+  const res = await fetch(`${BASE}/api/expense/recent`);
+  return res;
+}
+
+export async function deleteExpense(id) {
+  const res = await fetch(`${BASE}/api/expense/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  return res;
+}

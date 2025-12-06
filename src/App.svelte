@@ -1,6 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import Summary from './Summary.svelte';
+  import RecentExpenses from './RecentExpenses.svelte';
   import FloatingRecorder from './FloatingRecorder.svelte';
 </script>
 
@@ -69,7 +70,7 @@
 
 <header>
   <div class="brand">
-    <svg width="46" height="46" viewBox="0 0 24 24" fill="none" aria-hidden><rect width="24" height="24" rx="6" fill="#667eea"/><path d="M7 14l3 3 7-9" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+  <svg width="46" height="46" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect width="24" height="24" rx="6" fill="#667eea"/><path d="M7 14l3 3 7-9" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
     <div>
       <h1 style="font-size:1.25rem; margin:0">Voice Expense AI</h1>
       <div style="font-size:.85rem; color:#9aa3d6">Auto summary + quick record</div>
@@ -79,7 +80,12 @@
 
 <main>
   <div class="layout">
-    <Summary />
+    <div>
+      <Summary />
+    </div>
+    <aside>
+      <RecentExpenses />
+    </aside>
   </div>
 
   <!-- Floating recorder sits above layout -->

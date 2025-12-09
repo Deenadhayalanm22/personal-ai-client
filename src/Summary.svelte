@@ -74,24 +74,7 @@
     border-radius: 8px;
   }
 
-  /* keep single-column summary styling (chart + tiles) */
-
-  .grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-    gap: .8rem;
-    margin-top: .8rem;
-  }
-
-  .tile {
-    padding: .8rem;
-    border-radius: 8px;
-    background: rgba(255,255,255,0.02);
-    border: 1px solid rgba(255,255,255,0.04);
-  }
-
-  .tile .cat { font-weight:700; color: #e6ecff; }
-  .tile .amt { margin-top:.4rem; font-size:1.05rem; color: #baf0bd; font-weight:800; }
+  /* single-column summary styling (chart + legend) */
   .msg { padding:.6rem; border-radius:8px; margin-top:.5rem; font-weight:600; }
   .msg.error { background: rgba(245,87,108,0.12); color: #ffb4b4; }
 </style>
@@ -132,16 +115,7 @@
         </div>
   </div>
 
-  <div style="flex:1">
-        <div class="grid" role="list">
-          {#each Object.entries(summary) as [category, total]}
-            <div class="tile" role="listitem">
-              <div class="cat">{category}</div>
-              <div class="amt">{total}</div>
-            </div>
-          {/each}
-        </div>
-      </div>
+  <!-- Removed repetitive category tiles: legend already shows percentages per category -->
     </div>
   {:else}
     <div class="msg" style="background: rgba(255,255,255,0.02)">No data for this month yet.</div>

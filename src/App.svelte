@@ -1,8 +1,13 @@
 <script>
   import { onMount } from 'svelte';
-  import Summary from './Summary.svelte';
-  import RecentExpenses from './RecentExpenses.svelte';
-  import FloatingRecorder from './FloatingRecorder.svelte';
+  import Home from './Home.svelte';
+  // accessor object for two-way binding to the recorder's `text` property
+  const textAccessor = {
+    get: () => (recorderRef ? recorderRef.text : ''),
+    set: (v) => { if (recorderRef) recorderRef.text = v; }
+  };
+  function safeToggle() { try { recorderRef && recorderRef.toggleRecording(); } catch(e){} }
+  function safeSend() { try { return recorderRef && recorderRef.sendToBackend(); } catch(e){ return null; } }
 </script>
 
 <style>
@@ -79,15 +84,5 @@
 </header>
 
 <main>
-  <div class="layout">
-    <div>
-      <Summary />
-    </div>
-    <aside>
-      <RecentExpenses />
-    </aside>
-  </div>
-
-  <!-- Floating recorder sits above layout -->
-  <FloatingRecorder />
+  <Home />
 </main>

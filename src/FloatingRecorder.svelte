@@ -3,7 +3,7 @@
 
   let visible = false;
   let recording = false;
-  let text = '';
+  export let text = '';
   let interimText = '';
   let currentSessionText = '';
   let baseTextBeforeSession = '';
@@ -24,7 +24,7 @@
   let pressTimer = null;
   let lastTap = 0;
 
-  import { postExpense } from './lib/api.js';
+  import { processSpeech } from './lib/api.js';
 
   onMount(() => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -64,7 +64,8 @@
   });
 
   function togglePanel() {
-    visible = !visible;
+    // notify parent (App) that FAB was activated; App will call recorderRef.toggleRecording()
+    try { dispatch('activate'); } catch (e) {}
     error = '';
     success = '';
   }
@@ -107,7 +108,8 @@
     try { e.target.releasePointerCapture && e.target.releasePointerCapture(e.pointerId); } catch(e){}
   }
 
-  function toggleRecording() {
+  // exported for external panels to call (do not change internal STT behavior)
+  export function toggleRecording() {
     error = '';
     success = '';
     if (!recognition) { error = 'Speech recognition not supported in this browser.'; return; }
@@ -153,26 +155,22 @@
     toggleRecording();
   }
 
-  async function sendToBackend() {
-    if (!text || !text.trim()) { error = 'Nothing to send'; return; }
+  // exported so VoiceInputPanel can trigger the same send flow
+  export async function sendToBackend() {
+    if (!text || !text.trim()) { error = 'Nothing to send'; return null; }
     loading = true; error = ''; success = ''; saved = null;
     try {
-  const res = await postExpense(text.trim());
-      if (!res.ok) { const b = await res.text().catch(()=>''); throw new Error(`Server ${res.status} ${b}`); }
-      const ct = res.headers.get('content-type') || '';
-      let data = null; let textBody = '';
-      if (ct.includes('application/json')) data = await res.json(); else { textBody = await res.text(); try { data = JSON.parse(textBody); } catch(e){ data = null; } }
-  if (data && typeof data === 'object') { saved = data; success = 'Expense saved'; }
-  else { success = textBody || 'Transaction saved'; }
-  // optional: clear text on save
-  text = '';
-  // close panel and notify parent, then refresh main page so summaries update
-  visible = false;
-  try { dispatch('saved', { saved, message: success }); } catch(e) {}
-  // small delay to allow UI settle then reload to refresh main page data
-  setTimeout(() => { try { window.location.reload(); } catch(e) {} }, 300);
-    } catch (err) { error = 'Failed to save: ' + (err.message || ''); }
-    finally { loading = false; setTimeout(()=> success = '', 3000); }
+      const resp = await processSpeech(text.trim(), 'demo-user');
+      // resp: { ok, status, data }
+      const result = resp && resp.data ? resp.data : { status: resp && resp.status === 200 ? 'SUCCESS' : 'INVALID' };
+      // dispatch an event so parent can react
+      try { dispatch('processed', { result }); } catch (e) {}
+      // do not reload the page here; let the caller manage UI
+      return result;
+    } catch (err) {
+      error = 'Failed to process: ' + (err.message || '');
+      return { status: 'INVALID', message: error };
+    } finally { loading = false; setTimeout(()=> success = '', 3000); }
   }
 </script>
 
@@ -240,36 +238,6 @@
     on:dblclick|preventDefault={handleDoubleTap}
     aria-expanded={visible}
   >{visible ? '✕' : '🎤'}</button>
-  {#if visible}
-    <div class="panel" role="dialog" aria-modal="true"
-      on:touchstart|passive={onPointerDown}
-      on:touchmove|passive={onPointerMove}
-      on:touchend={onPointerUp}
-      on:mousedown={onPointerDown}
-      on:mousemove={onPointerMove}
-      on:mouseup={onPointerUp}
-      style="transform: translateY({dragTranslate}px); transition: {dragging ? 'none' : 'transform 180ms ease-out'}"
-    >
-      <div class="panel-inner">
-        <div class="panel-left">
-          <button class="fab" on:click={toggleRecording} class:recording={recording}>{recording ? '⏹' : '🎙'}</button>
-          <div class="meta">{recording ? 'Recording...' : 'Tap to record'}</div>
-          <button class="capture" on:click={toggleRecording} style="margin-top:.6rem">{recording ? 'Stop' : 'Capture'}</button>
-          <button class="send" on:click={sendToBackend} disabled={loading} style="margin-top:.6rem">{loading ? 'Sending...' : 'Send'}</button>
-        </div>
-
-        <div class="panel-mid">
-          <div style="display:flex; gap: .5rem; align-items:center; justify-content:flex-start;">
-            <div style="flex:1"></div>
-            <div style="color:#9aa3d6; font-size:.9rem; margin-left:8px">{success ? success : ''}</div>
-            <button class="close-inline" aria-label="Close" on:click={closePanel}>✕</button>
-          </div>
-          <textarea bind:value={text} placeholder="Captured transcription appears here..."></textarea>
-          {#if error}
-            <div class="meta" style="color:#ffb4b4">{error}</div>
-          {/if}
-        </div>
-      </div>
-    </div>
-  {/if}
+  <!-- FAB no longer opens a floating panel; it dispatches `activate` for the app to handle (e.g. start recording)
+       The persistent chat will be shown in the right column of the app layout. -->
 </div>

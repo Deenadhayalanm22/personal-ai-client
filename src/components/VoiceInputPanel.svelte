@@ -4,8 +4,8 @@
   import { createEventDispatcher, onMount } from 'svelte';
   export let text = '';
   export let updateText = (v) => { text = v; };
-  export let toggleRecording; // function passed from FloatingRecorder
-  export let sendToBackend; // function passed from FloatingRecorder
+  // typing-only: call processSpeech directly
+  import { processSpeech } from '../lib/api.js';
   export let bindVisible = true; // optional binding
   const dispatch = createEventDispatcher();
 
@@ -27,16 +27,8 @@
     // call the shared sendToBackend if provided (the FloatingRecorder's sendToBackend) else call API directly
     try {
       let result;
-      if (sendToBackend) {
-        // sendToBackend is expected to behave like the existing function: it will POST and reset text accordingly
-        // but we need the backend JSON structure of status
-        // We'll call processSpeech too for reliable result shape
-        const resp = await processSpeech(userText, 'demo-user');
-        result = resp.data || { status: resp.status === 200 ? 'SUCCESS' : 'INVALID' };
-      } else {
-        const resp = await processSpeech(userText, 'demo-user');
-        result = resp.data || { status: resp.status === 200 ? 'SUCCESS' : 'INVALID' };
-      }
+      const resp = await processSpeech(userText, 'demo-user');
+      result = resp.data || { status: resp.status === 200 ? 'SUCCESS' : 'INVALID' };
 
       lastResponse = result;
       // handle response statuses
@@ -48,8 +40,7 @@
         if (result.saved) pushMessage('assistant', JSON.stringify(result.saved), 'normal');
         // reset composer
         text = '';
-        // if FloatingRecorder.sendToBackend exists, call it to maintain the same side-effects
-        try { sendToBackend && sendToBackend(); } catch(e){}
+  // notify parent via event; parent will refresh lists via the saved event
       } else {
         pushMessage('assistant', result.message || 'There was an issue', 'error');
       }
@@ -86,7 +77,7 @@
       <div class="input">
           <textarea value={text} on:input={(e) => updateText(e.target.value)} placeholder="Speak or type..." rows="2" on:keydown={onKeydown}></textarea>
         </div>
-      <button class="record" on:click={() => toggleRecording && toggleRecording()}>🎙</button>
+  <!-- record button removed; typing-only input -->
       <button class="send" on:click={handleSend} disabled={pending}>{pending ? 'Sending...' : 'Send'}</button>
     </div>
   </div>

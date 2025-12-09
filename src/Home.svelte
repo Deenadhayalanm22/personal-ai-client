@@ -38,7 +38,7 @@
   .small { color:#9aa3d6; font-size:.9rem }
   .recent-item { display:flex; justify-content:space-between; gap:.6rem; padding:.4rem 0; border-bottom:1px solid rgba(255,255,255,0.02) }
   .muted { color:#9aa3d6 }
-  .mic-wrap { position:fixed; right:18px; bottom:18px }
+  .fab-wrap { position:fixed; right:18px; bottom:18px }
 </style>
 
 <div class="home">
@@ -85,9 +85,9 @@
     </div>
   </div>
 
-  <div class="mic-wrap">
+  <div class="fab-wrap">
     <FloatingRecorder bind:this={recorderRef} on:activate={() => { openDrawer(); }} />
   </div>
 
-  <ChatDrawer visible={drawerVisible} text={sttText} updateText={(v)=> sttText = v} toggleRecording={() => recorderRef && recorderRef.toggleRecording()} on:close={closeDrawer} on:saved={() => { loadAll(); }} />
+  <ChatDrawer visible={drawerVisible} text={sttText} updateText={(v)=> sttText = v} on:close={closeDrawer} on:saved={() => { loadAll(); }} />
 </div>

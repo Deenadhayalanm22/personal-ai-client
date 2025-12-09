@@ -5,7 +5,7 @@
   export let visible = false;
   export let text = '';
   export let updateText = (v) => { text = v; };
-  export let toggleRecording = () => {};
+  // no STT toggle in typing-only mode
   export let processFn = null; // optional override
   const dispatch = createEventDispatcher();
 
@@ -61,11 +61,10 @@
 </style>
 
 {#if visible}
-  <div class="drawer" role="dialog" aria-modal="true">
+  <div class="drawer" role="dialog" aria-modal="true" tabindex="0">
     <div class="header">
       <div style="font-weight:700">Assistant</div>
       <div style="display:flex; gap:.6rem; align-items:center">
-        <div style="font-size:.82rem; color:#9aa3d6">Tap mic to speak</div>
         <button aria-label="Close" on:click={() => { visible = false; dispatch('close'); }} style="background:transparent; border:none; color:#e6eefc">✕</button>
       </div>
     </div>

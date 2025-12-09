@@ -1,73 +1,29 @@
 <script>
-  import { onMount, createEventDispatcher } from 'svelte';
-
-  let visible = false;
-  let recording = false;
-  export let text = '';
-  let interimText = '';
-  let currentSessionText = '';
-  let baseTextBeforeSession = '';
-  let recognition;
-  let loading = false;
-  let error = '';
-  let success = '';
-  let saved = null;
+  import { createEventDispatcher } from 'svelte';
   const dispatch = createEventDispatcher();
 
-  // drag-to-close state
+  // Local state (previously removed during STT refactor). Keep defaults so template bindings don't throw.
+  let visible = false;
   let dragging = false;
-  let dragStartY = 0;
-  let dragTranslate = 0; // pixels
-  const DRAG_CLOSE_THRESHOLD = 120; // pixels to drag down to close
+  let dragTranslate = 0;
+  let error = '';
+  let success = '';
 
-  // gesture helpers
-  let pressTimer = null;
-  let lastTap = 0;
-
-  import { processSpeech } from './lib/api.js';
-
-  onMount(() => {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) return;
-
-    recognition = new SpeechRecognition();
-    recognition.lang = 'en-IN';
-    recognition.interimResults = true;
-    recognition.continuous = false;
-
-    recognition.onresult = (event) => {
-      let interim = '';
-      for (let i = 0; i < event.results.length; i++) {
-        const res = event.results[i];
-        const transcript = res[0].transcript;
-        if (res.isFinal) currentSessionText += transcript + ' ';
-        else interim += transcript;
-      }
-      interimText = interim;
-      const prefix = baseTextBeforeSession ? baseTextBeforeSession.trim() + ' ' : '';
-      text = (prefix + currentSessionText + (interimText ? interimText : '')).trim();
-    };
-
-    recognition.onend = () => {
-      recording = false;
-      const prefix = baseTextBeforeSession ? baseTextBeforeSession.trim() + ' ' : '';
-      text = (prefix + currentSessionText + (interimText ? interimText : '')).trim();
-      currentSessionText = '';
-      interimText = '';
-      baseTextBeforeSession = '';
-    };
-
-    recognition.onerror = (e) => {
-      recording = false;
-      error = 'Speech recognition error: ' + (e.error || 'unknown');
-    };
-  });
+  // No-op press handlers: the FAB no longer performs long-press or drag logic, but handlers are kept to avoid
+  // runtime errors when touch/mouse events wire to non-existent functions.
+  function startPress() {
+    /* intentionally empty */
+  }
+  function endPress() {
+    /* intentionally empty */
+  }
+  function cancelPress() {
+    /* intentionally empty */
+  }
 
   function togglePanel() {
-    // notify parent (App) that FAB was activated; App will call recorderRef.toggleRecording()
-    try { dispatch('activate'); } catch (e) {}
-    error = '';
-    success = '';
+    // notify parent that FAB was activated; parent (App/Home) will open the chat drawer
+    dispatch('activate');
   }
 
   function closePanel() {
@@ -78,100 +34,7 @@
     success = '';
   }
 
-  function onPointerDown(e) {
-    // only start drag if pointer is on panel area and visible
-    if (!visible) return;
-    dragging = true;
-    dragStartY = (e.touches ? e.touches[0].clientY : e.clientY);
-    dragTranslate = 0;
-    // capture pointer for mouse events
-    try { e.target.setPointerCapture && e.target.setPointerCapture(e.pointerId); } catch(e){}
-  }
-
-  function onPointerMove(e) {
-    if (!dragging) return;
-    const y = (e.touches ? e.touches[0].clientY : e.clientY);
-    dragTranslate = Math.max(0, y - dragStartY);
-  }
-
-  function onPointerUp(e) {
-    if (!dragging) return;
-    dragging = false;
-    // close if dragged enough
-    if (dragTranslate > DRAG_CLOSE_THRESHOLD) {
-      visible = false;
-      dragTranslate = 0;
-    } else {
-      // snap back
-      dragTranslate = 0;
-    }
-    try { e.target.releasePointerCapture && e.target.releasePointerCapture(e.pointerId); } catch(e){}
-  }
-
-  // exported for external panels to call (do not change internal STT behavior)
-  export function toggleRecording() {
-    error = '';
-    success = '';
-    if (!recognition) { error = 'Speech recognition not supported in this browser.'; return; }
-    if (recording) { recognition.stop(); recording = false; return; }
-    baseTextBeforeSession = text || '';
-    currentSessionText = '';
-    interimText = '';
-    try { recognition.start(); recording = true; } catch (e) { error = 'Could not start recognition'; }
-  }
-
-  function ensurePanelOpen() {
-    if (!visible) visible = true;
-  }
-
-  function startPress(event) {
-    // start a long-press timer (400ms)
-    // also detect double-tap via timestamp
-    const now = Date.now();
-    if (now - lastTap < 300) {
-      // treat as double tap
-      handleDoubleTap();
-      lastTap = 0;
-      return;
-    }
-    lastTap = now;
-
-    pressTimer = setTimeout(() => {
-      // long-press detected
-      ensurePanelOpen();
-      toggleRecording();
-      pressTimer = null;
-    }, 400);
-  }
-
-  function endPress() {
-    if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
-  }
-
-  function cancelPress() { if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; } }
-
-  function handleDoubleTap() {
-    ensurePanelOpen();
-    toggleRecording();
-  }
-
-  // exported so VoiceInputPanel can trigger the same send flow
-  export async function sendToBackend() {
-    if (!text || !text.trim()) { error = 'Nothing to send'; return null; }
-    loading = true; error = ''; success = ''; saved = null;
-    try {
-      const resp = await processSpeech(text.trim(), 'demo-user');
-      // resp: { ok, status, data }
-      const result = resp && resp.data ? resp.data : { status: resp && resp.status === 200 ? 'SUCCESS' : 'INVALID' };
-      // dispatch an event so parent can react
-      try { dispatch('processed', { result }); } catch (e) {}
-      // do not reload the page here; let the caller manage UI
-      return result;
-    } catch (err) {
-      error = 'Failed to process: ' + (err.message || '');
-      return { status: 'INVALID', message: error };
-    } finally { loading = false; setTimeout(()=> success = '', 3000); }
-  }
+  // Note: STT was removed by user request; FloatingRecorder is intentionally minimal.
 </script>
 
 <style>
@@ -235,9 +98,9 @@
     on:mouseup={endPress}
     on:mouseleave={cancelPress}
     on:click={togglePanel}
-    on:dblclick|preventDefault={handleDoubleTap}
+    
     aria-expanded={visible}
-  >{visible ? '✕' : '🎤'}</button>
+  >{visible ? '✕' : '+'}</button>
   <!-- FAB no longer opens a floating panel; it dispatches `activate` for the app to handle (e.g. start recording)
        The persistent chat will be shown in the right column of the app layout. -->
 </div>

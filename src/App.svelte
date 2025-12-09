@@ -6,8 +6,7 @@
     get: () => (recorderRef ? recorderRef.text : ''),
     set: (v) => { if (recorderRef) recorderRef.text = v; }
   };
-  function safeToggle() { try { recorderRef && recorderRef.toggleRecording(); } catch(e){} }
-  function safeSend() { try { return recorderRef && recorderRef.sendToBackend(); } catch(e){ return null; } }
+  function safeSend() { return null; }
 </script>
 
 <style>

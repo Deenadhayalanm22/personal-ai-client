@@ -10,92 +10,13 @@
   let success = '';
   let saved = null; // server returned expense object
 
-  // STT state
-  let listening = false;
-  let interimText = '';
-  let currentSessionText = '';
-  let baseTextBeforeSession = '';
-  let recognition;
+  // typing-only input (STT removed)
+  let textareaEl;
 
 
-  onMount(() => {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      // feature not available; keep the UI functional (paste)
-      console.warn('SpeechRecognition not supported in this browser');
-      return;
-    }
+  // no onMount STT initialization (removed)
 
-    recognition = new SpeechRecognition();
-    recognition.lang = 'en-IN';
-    recognition.interimResults = true;
-    recognition.continuous = false;
-
-    recognition.onresult = (event) => {
-      let interim = '';
-      // accumulate final results for this session
-      for (let i = 0; i < event.results.length; i++) {
-        const res = event.results[i];
-        const transcript = res[0].transcript;
-        if (res.isFinal) {
-          currentSessionText += transcript + ' ';
-        } else {
-          interim += transcript;
-        }
-      }
-
-      interimText = interim;
-
-      // live-update the textarea value combining base + session + interim
-      const prefix = baseTextBeforeSession ? baseTextBeforeSession.trim() + ' ' : '';
-      text = (prefix + currentSessionText + (interimText ? interimText : '')).trim();
-    };
-
-    recognition.onend = () => {
-      listening = false;
-      // finalize session: ensure textarea contains finalized session text
-      const prefix = baseTextBeforeSession ? baseTextBeforeSession.trim() + ' ' : '';
-      text = (prefix + currentSessionText + (interimText ? interimText : '')).trim();
-      // clear session holders (keep text visible)
-      currentSessionText = '';
-      interimText = '';
-      baseTextBeforeSession = '';
-    };
-
-    recognition.onerror = (e) => {
-      console.error('Speech recognition error', e);
-      error = 'Speech recognition error: ' + (e.error || 'unknown');
-      listening = false;
-    };
-  });
-
-  function toggleRecording() {
-    error = '';
-    success = '';
-    if (!recognition) {
-      error = 'Speech recognition not available in this browser.';
-      return;
-    }
-
-    if (listening) {
-      recognition.stop();
-      listening = false;
-      return;
-    }
-
-    // start new session
-    baseTextBeforeSession = text || '';
-    currentSessionText = '';
-    interimText = '';
-    try {
-      recognition.start();
-      listening = true;
-    } catch (err) {
-      console.error('start error', err);
-      error = 'Could not start recognition';
-      listening = false;
-    }
-  }
+  function focusInput() { textareaEl && textareaEl.focus(); }
 
   async function saveExpense() {
     error = '';
@@ -252,19 +173,17 @@
   <h2 style="margin:0 0 .6rem 0">Record Expense</h2>
 
   <div class="form">
-    <label style="font-size:.9rem; color:#bfc8ff">Transcription (paste, type or record)</label>
+    <label style="font-size:.9rem; color:#bfc8ff">Input (type)</label>
     <div class="rec-row">
-      <div style="flex:0 0 120px; display:flex; align-items:center; justify-content:center;">
+      <div style="flex:0 0 64px; display:flex; align-items:center; justify-content:center;">
         <div style="display:flex; flex-direction:column; align-items:center; gap:.5rem;">
-          <button type="button" class="mic {listening ? 'listening' : ''}" on:click={toggleRecording} aria-pressed={listening} title={listening ? 'Stop recording' : 'Start recording'}>
-            {#if listening}⏹{:else}🎤{/if}
-          </button>
-          <div class="mic-status">{listening ? 'Listening...' : 'Record'}</div>
+          <button type="button" class="mic" on:click={focusInput} title="Add">+</button>
+          <div class="mic-status">Add</div>
         </div>
       </div>
 
       <div class="text-panel" style="flex:1;">
-        <textarea bind:value={text} placeholder='e.g., "Paid ₹350 for lunch at Cafe Blue using card"'></textarea>
+        <textarea bind:this={textareaEl} bind:value={text} placeholder='e.g., "Paid ₹350 for lunch at Cafe Blue using card"'></textarea>
 
         <div class="actions">
           <button class="btn btn-primary" on:click={saveExpense} disabled={loading}>

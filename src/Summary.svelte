@@ -47,13 +47,11 @@
     loading = true;
     error = '';
     try {
-      import('./lib/api.js').then(m => m.getCurrentMonthSummary()).catch(()=>null);
-      const res = await (await import('./lib/api.js')).getCurrentMonthSummary();
-      if (!res.ok) {
-        throw new Error(`Server returned ${res.status}`);
-      }
-  summary = await res.json();
-  chartData = buildChart(summary);
+      const { getExpenseSummary } = await import('./lib/api.js');
+      const s = await getExpenseSummary();
+      // build a chart from categoryTotals map
+      summary = s.categoryTotals || {};
+      chartData = buildChart(summary);
     } catch (err) {
       console.error('Summary fetch error', err);
       error = 'Failed to load summary: ' + (err.message || '');

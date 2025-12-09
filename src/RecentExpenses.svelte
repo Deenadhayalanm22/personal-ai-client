@@ -1,6 +1,6 @@
 <script>
   import { onMount } from 'svelte';
-  import { getRecentExpenses, deleteExpense } from './lib/api.js';
+  import { getExpenseSummary, deleteTransaction } from './lib/api.js';
 
   let loading = false;
   let error = '';
@@ -10,9 +10,8 @@
     loading = true;
     error = '';
     try {
-      const res = await getRecentExpenses();
-      if (!res || !res.ok) throw new Error(`Server ${res ? res.status : 'no-response'}`);
-      expenses = await res.json();
+      const s = await getExpenseSummary();
+      expenses = s.recentTransactions || [];
     } catch (err) {
       console.error('Failed to load recent expenses', err);
       error = 'Could not load recent expenses';
@@ -28,10 +27,8 @@
     const removed = expenses[index];
     expenses = expenses.slice(0, index).concat(expenses.slice(index + 1));
     try {
-      const res = await deleteExpense(id);
-      if (!res || (res.status !== 200 && res.status !== 204)) {
-        throw new Error(`Delete failed ${res ? res.status : 'no-response'}`);
-      }
+      const ok = await deleteTransaction(id);
+      if (!ok) throw new Error('Delete failed');
     } catch (err) {
       // rollback
       expenses = [...expenses.slice(0, index), removed, ...expenses.slice(index)];

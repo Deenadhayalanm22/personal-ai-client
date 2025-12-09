@@ -27,29 +27,7 @@ export async function processSpeech(text, userId = 'demo-user') {
   }
 }
 
-export async function getRecentTransactions() {
-  try {
-    const res = await fetch(`${BASE}/api/v1/recent`);
-    if (!res.ok) throw new Error(`Status ${res.status}`);
-    return await res.json();
-  } catch (e) { console.error('getRecentTransactions', e); return []; }
-}
 
-export async function getTodaySummary() {
-  try {
-    const res = await fetch(`${BASE}/api/v1/summary/today`);
-    if (!res.ok) throw new Error(`Status ${res.status}`);
-    return await res.json();
-  } catch (e) { console.error('getTodaySummary', e); return null; }
-}
-
-export async function getMonthlySummary() {
-  try {
-    const res = await fetch(`${BASE}/api/v1/summary/monthly`);
-    if (!res.ok) throw new Error(`Status ${res.status}`);
-    return await res.json();
-  } catch (e) { console.error('getMonthlySummary', e); return null; }
-}
 
 export async function deleteTransaction(id) {
   try {
@@ -58,17 +36,18 @@ export async function deleteTransaction(id) {
   } catch (e) { console.error('deleteTransaction', e); return false; }
 }
 
-export async function getCurrentMonthSummary() {
-  const res = await fetch(`${BASE}/api/expense/summary/current-month`);
-  return res;
-}
 
-export async function getRecentExpenses() {
-  const res = await fetch(`${BASE}/api/expense/recent`);
-  return res;
-}
 
-export async function deleteExpense(id) {
-  const res = await fetch(`${BASE}/api/expense/${encodeURIComponent(id)}`, { method: 'DELETE' });
-  return res;
+// New single-summary endpoint that returns today's total, month total, categories and recent transactions
+export async function getExpenseSummary() {
+  try {
+    const res = await fetch(`${BASE}/api/expense/summary`);
+    if (!res.ok) throw new Error(`Status ${res.status}`);
+    const json = await res.json();
+    return json;
+  } catch (e) {
+    console.error('getExpenseSummary', e);
+    // return a safe default shape
+    return { todayTotal: 0, monthTotal: 0, categoryTotals: {}, recentTransactions: [] };
+  }
 }

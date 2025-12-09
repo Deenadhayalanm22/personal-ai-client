@@ -1,6 +1,6 @@
 <script>
   import { onMount } from 'svelte';
-  import { getRecentTransactions, getTodaySummary, getMonthlySummary, deleteTransaction } from './lib/api.js';
+  import { getExpenseSummary, deleteTransaction } from './lib/api.js';
   import FloatingRecorder from './FloatingRecorder.svelte';
   import ChatDrawer from './components/ChatDrawer.svelte';
 
@@ -12,9 +12,10 @@
   let sttText = '';
 
   async function loadAll(){
-    recent = await getRecentTransactions();
-    today = await getTodaySummary();
-    monthly = await getMonthlySummary();
+    const s = await getExpenseSummary();
+    today = { total: s.todayTotal, biggestCategory: Object.keys(s.categoryTotals || {})[0] || '—' };
+    monthly = { total: s.monthTotal };
+    recent = s.recentTransactions || [];
   }
 
   onMount(()=>{ loadAll(); });
@@ -60,7 +61,11 @@
         {#if recent && recent.length}
           {#each recent.slice(0,5) as r}
             <div class="recent-item">
-              <div>{r.category} — {r.amount}</div>
+              <div>
+                <div style="font-weight:700">{r.category} {r.subcategory ? '· ' + r.subcategory : ''}</div>
+                <div class="muted">{r.merchantName || ''}</div>
+              </div>
+              <div class="muted">{r.amount}</div>
               <div class="muted">{new Date(r.spentAt).toLocaleTimeString()}</div>
               <div>
                 <button on:click={()=>{/* edit placeholder */}}>edit</button>

@@ -9,17 +9,7 @@
   let error = '';
   let success = '';
 
-  // No-op press handlers: the FAB no longer performs long-press or drag logic, but handlers are kept to avoid
-  // runtime errors when touch/mouse events wire to non-existent functions.
-  function startPress() {
-    /* intentionally empty */
-  }
-  function endPress() {
-    /* intentionally empty */
-  }
-  function cancelPress() {
-    /* intentionally empty */
-  }
+  // The FAB is intentionally minimal: clicking or tapping it dispatches 'activate'.
 
   function togglePanel() {
     // notify parent that FAB was activated; parent (App/Home) will open the chat drawer
@@ -92,13 +82,8 @@
 <div class="floating">
   <button
     class="fab"
-    on:touchstart|preventDefault={startPress}
-    on:touchend={endPress}
-    on:mousedown={startPress}
-    on:mouseup={endPress}
-    on:mouseleave={cancelPress}
+    on:touchend={togglePanel}
     on:click={togglePanel}
-    
     aria-expanded={visible}
   >{visible ? '✕' : '+'}</button>
   <!-- FAB no longer opens a floating panel; it dispatches `activate` for the app to handle (e.g. start recording)

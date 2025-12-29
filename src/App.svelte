@@ -1,6 +1,20 @@
 <script>
   import { onMount } from 'svelte';
   import Home from './Home.svelte';
+
+  import PrivacyPolicy from './PrivacyPolicy.svelte';
+  
+  // Simple routing
+  let currentRoute = $state(window.location.hash.slice(1) || '/');
+  
+  onMount(() => {
+    const handleHashChange = () => {
+      currentRoute = window.location.hash.slice(1) || '/';
+    };
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  });
+
   // accessor object for two-way binding to the recorder's `text` property
   const textAccessor = {
     get: () => (recorderRef ? recorderRef.text : ''),

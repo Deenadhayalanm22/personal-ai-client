@@ -97,5 +97,9 @@
 </header>
 
 <main>
+{#if currentRoute === '/privacy-policy'}
+    <PrivacyPolicy />
+  {:else}
   <Home />
+  {/if}
 </main>

@@ -2,12 +2,14 @@
   import { onMount } from 'svelte';
   import Home from './Home.svelte';
   import PrivacyPolicy from './PrivacyPolicy.svelte';
-  import { ApiError, exchangeMagicLink, getDashboard } from './lib/api.js';
+  import { ApiError, exchangeMagicLink, getDashboard, getExpenseTaxonomy } from './lib/api.js';
 
   const isPrivacyPage = window.location.pathname === '/privacy-policy';
   let auth = 'checking';
   let dashboard = 'loading';
   let data = null;
+  let taxonomy = null;
+  let taxonomyError = '';
   let error = '';
   let selectedMonth = new Date().toISOString().slice(0, 7);
 
@@ -29,10 +31,18 @@
     try {
       if (token) await exchangeMagicLink(token);
       auth = 'authenticated';
-      await loadDashboard(selectedMonth);
     } catch (cause) {
       auth = 'expired';
+      return;
     }
+
+    const taxonomyRequest = getExpenseTaxonomy()
+      .then((value) => { taxonomy = value; })
+      .catch((cause) => {
+        if (cause instanceof ApiError && cause.status === 401) auth = 'expired';
+        else taxonomyError = cause instanceof Error ? cause.message : 'Unable to load categories.';
+      });
+    await Promise.all([loadDashboard(selectedMonth), taxonomyRequest]);
   }
 
   onMount(() => { if (!isPrivacyPage) initialize(); });
@@ -52,5 +62,5 @@
     <p>Send <strong>“show my link”</strong> on WhatsApp to receive a new one.</p>
   </main>
 {:else}
-  <Home {data} {dashboard} {error} {selectedMonth} onMonthChange={(month) => loadDashboard(month)} onRefresh={() => loadDashboard(selectedMonth, { retain: true })} onExpired={() => auth = 'expired'} />
+  <Home {data} {dashboard} {error} {taxonomy} {taxonomyError} {selectedMonth} onMonthChange={(month) => loadDashboard(month)} onRefresh={() => loadDashboard(selectedMonth, { retain: true })} onExpired={() => auth = 'expired'} />
 {/if}

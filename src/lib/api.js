@@ -29,6 +29,7 @@ export async function exchangeMagicLink(token) {
 }
 
 export const getDashboard = (month) => request(`/api/web/dashboard?month=${encodeURIComponent(month)}`);
+export const getExpenseTaxonomy = () => request('/api/web/expense-taxonomy');
 
 export function getExpenses(month, beforeId, limit = 20) {
   const params = new URLSearchParams({ month, limit: String(limit) });

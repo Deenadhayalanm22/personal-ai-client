@@ -1,7 +1,7 @@
 <script>
   import { ApiError, deleteExpense, getExpenses, updateClassification } from './lib/api.js';
 
-  export let data; export let dashboard; export let error; export let selectedMonth;
+  export let data; export let dashboard; export let error; export let taxonomy; export let taxonomyError; export let selectedMonth;
   export let onMonthChange; export let onRefresh; export let onExpired;
 
   let items = []; let nextBeforeId = null; let hydratedData = null;
@@ -16,7 +16,11 @@
   $: total = Number(summary.total ?? summary.totalSpent ?? data?.totalSpent ?? data?.total ?? 0);
   $: count = Number(summary.transactionCount ?? data?.transactionCount ?? items.length);
   $: largestCategory = normalizedCategories[0]?.name || normalizedCategories[0]?.category || '—';
-  $: categoryOptions = data?.classificationOptions?.categories || data?.availableCategories || normalizedCategories;
+  $: categoryOptions = Array.isArray(taxonomy?.categories) ? taxonomy.categories : [];
+  $: selectedTaxonomyCategory = categoryOptions.find((option) => option.name.toLocaleLowerCase() === category.trim().toLocaleLowerCase());
+  $: subcategoryOptions = selectedTaxonomyCategory?.subcategories || [];
+  $: selectedTaxonomySubcategory = subcategoryOptions.find((option) => option.toLocaleLowerCase() === subcategory.trim().toLocaleLowerCase());
+  $: classificationValid = Boolean(selectedTaxonomyCategory && selectedTaxonomySubcategory);
   $: if (data && data !== hydratedData) {
     hydratedData = data;
     items = data.recentExpenses?.items || data.recentExpenses?.expenses || (Array.isArray(data.recentExpenses) ? data.recentExpenses : []);
@@ -70,13 +74,18 @@
   }
   function openEdit(item) { editing = item; category = expenseCategory(item); subcategory = expenseSubcategory(item); formError = ''; }
   function changed() { return editing && (category !== expenseCategory(editing) || subcategory !== expenseSubcategory(editing)); }
+  function onCategoryChange(value) {
+    if (value !== category) subcategory = '';
+    category = value;
+    formError = '';
+  }
   async function saveEdit() {
-    if (!changed() || saving) return;
+    if (!changed() || !classificationValid || saving) return;
     const staleId = editing.id;
     saving = true; formError = '';
     try {
-      const updated = await updateClassification(editing.id, category, subcategory, editing.version);
-      items = items.map((item) => item.id === editing.id ? updated : item); editing = null;
+      const updated = await updateClassification(editing.id, selectedTaxonomyCategory.name, selectedTaxonomySubcategory, editing.version);
+      items = items.map((item) => item.id === staleId ? updated : item); editing = null;
       await onRefresh();
     } catch (cause) {
       if (cause instanceof ApiError && cause.status === 409) { editing = null; notice = 'This expense changed after you opened it. The latest information has been loaded.'; await onRefresh(); }
@@ -150,7 +159,7 @@
   {/if}
 </main>
 
-{#if editing}<div class="modal-backdrop" role="presentation" on:click={(event) => event.currentTarget === event.target && !saving && (editing = null)}><div class="modal" role="dialog" aria-modal="true" aria-labelledby="edit-title"><button class="close" on:click={() => editing = null} disabled={saving} aria-label="Close">×</button><p class="eyebrow">Classification</p><h2 id="edit-title">Edit classification</h2><div class="original"><small>Original message</small><p>“{message(editing)}”</p></div><label>Category<input list="categories" bind:value={category} disabled={saving} /><datalist id="categories">{#each categoryOptions as option}<option value={option.name || option.category || option}></option>{/each}</datalist></label><label>Subcategory<input bind:value={subcategory} disabled={saving} /></label>{#if formError}<p class="form-error" role="alert">{formError}</p>{/if}<div class="modal-actions"><button class="secondary" on:click={() => editing = null} disabled={saving}>Cancel</button><button class="primary" on:click={saveEdit} disabled={!changed() || saving}>{saving ? 'Saving…' : 'Save changes'}</button></div></div></div>{/if}
+{#if editing}<div class="modal-backdrop" role="presentation" on:click={(event) => event.currentTarget === event.target && !saving && (editing = null)}><div class="modal" role="dialog" aria-modal="true" aria-labelledby="edit-title"><button class="close" on:click={() => editing = null} disabled={saving} aria-label="Close">×</button><p class="eyebrow">Classification</p><h2 id="edit-title">Edit classification</h2><div class="original"><small>Original message</small><p>“{message(editing)}”</p></div><label>Category<input list="expense-categories" value={category} on:input={(event) => onCategoryChange(event.currentTarget.value)} disabled={saving || !categoryOptions.length} placeholder="Search or select category" autocomplete="off" /><datalist id="expense-categories">{#each categoryOptions as option}<option value={option.name}></option>{/each}</datalist></label><label>Subcategory<input list="expense-subcategories" bind:value={subcategory} on:input={() => formError = ''} disabled={saving || !selectedTaxonomyCategory} placeholder="Search or select subcategory" autocomplete="off" /><datalist id="expense-subcategories">{#each subcategoryOptions as option}<option value={option}></option>{/each}</datalist></label>{#if taxonomyError}<p class="form-error" role="alert">Categories are unavailable right now. {taxonomyError}</p>{/if}{#if formError}<p class="form-error" role="alert">{formError}</p>{/if}<div class="modal-actions"><button class="secondary" on:click={() => editing = null} disabled={saving}>Cancel</button><button class="primary" on:click={saveEdit} disabled={!changed() || !classificationValid || saving}>{saving ? 'Saving…' : 'Save changes'}</button></div></div></div>{/if}
 
 {#if deleting}<div class="modal-backdrop" role="presentation" on:click={(event) => event.currentTarget === event.target && !saving && (deleting = null)}><div class="modal" role="alertdialog" aria-modal="true" aria-labelledby="delete-title"><button class="close" on:click={() => deleting = null} disabled={saving} aria-label="Close">×</button><p class="eyebrow danger-copy">Please confirm</p><h2 id="delete-title">Delete this expense?</h2><div class="delete-preview"><p>“{message(deleting)}”</p><strong>{money(deleting.amount)} · {expenseCategory(deleting)}</strong></div><p class="consequence">This will remove the expense from your reports and restore its account-balance effect when applicable.</p>{#if formError}<p class="form-error" role="alert">{formError}</p>{/if}<div class="modal-actions"><button class="secondary" on:click={() => deleting = null} disabled={saving}>Cancel</button><button class="danger-button" on:click={confirmDelete} disabled={saving}>{saving ? 'Deleting…' : 'Delete expense'}</button></div></div></div>{/if}
 {#if selectedAccount}

@@ -5,7 +5,7 @@
   export let onMonthChange; export let onRefresh; export let onExpired;
 
   let items = []; let nextBeforeId = null; let hydratedData = null;
-  let loadingMore = false; let editing = null; let deleting = null; let saving = false;
+  let loadingMore = false; let editing = null; let deleting = null; let selectedAccount = null; let saving = false;
   let formError = ''; let notice = ''; let toast = '';
   let category = ''; let subcategory = '';
 
@@ -118,29 +118,15 @@
     </section>
 
     {#if accounts.length}
-      <section class="accounts-section" aria-labelledby="accounts-heading">
-        <div class="section-title"><div><p class="eyebrow">Balances</p><h2 id="accounts-heading">Your accounts</h2></div><span>{accounts.length} active</span></div>
-        <div class="account-grid">
+      <section class="wallet-strip" aria-labelledby="accounts-heading">
+        <div class="wallet-label"><span class="wallet-icon" aria-hidden="true">₹</span><div><h2 id="accounts-heading">Your accounts</h2><p>Tap a card for details</p></div></div>
+        <div class="wallet-cards">
           {#each accounts as financialAccount (financialAccount.id)}
-            <article class:credit-card={financialAccount.type === 'CREDIT_CARD'} class:over-limit={financialAccount.overLimit} class="account-card">
-              <div class="account-card-top"><span class="account-type">{accountType(financialAccount.type)}</span><span class="account-dot" aria-hidden="true"></span></div>
-              <h3>{financialAccount.name}</h3>
-              <p>{financialAccount.primaryLabel}</p>
-              {#if financialAccount.primaryValue == null}
-                <strong class="balance-missing">Balance not recorded</strong>
-              {:else}
-                <strong>{accountMoney(financialAccount.primaryValue, financialAccount.currency)}</strong>
-              {/if}
-              {#if financialAccount.type === 'CREDIT_CARD'}
-                {@const usage = creditUsage(financialAccount)}
-                <div class="credit-details">
-                  <div><span>Outstanding</span><b>{financialAccount.outstanding == null ? '—' : accountMoney(financialAccount.outstanding, financialAccount.currency)}</b></div>
-                  <div><span>Credit limit</span><b>{financialAccount.creditLimit == null ? '—' : accountMoney(financialAccount.creditLimit, financialAccount.currency)}</b></div>
-                </div>
-                {#if usage != null}<div class="utilization"><div><span>Credit used</span><b>{usage.toFixed(0)}%</b></div><div class="utilization-bar"><span style={`width:${usage}%`}></span></div></div>{/if}
-              {/if}
-              {#if financialAccount.overLimit}<div class="over-limit-warning">Over limit by {accountMoney(financialAccount.overLimitAmount, financialAccount.currency)}</div>{/if}
-            </article>
+            <button class:credit-chip={financialAccount.type === 'CREDIT_CARD'} class:chip-warning={financialAccount.overLimit} class="account-chip" on:click={() => selectedAccount = financialAccount} aria-label={`View ${financialAccount.name} details`}>
+              <span><b>{financialAccount.name}</b><small>{financialAccount.primaryLabel}</small></span>
+              <strong>{financialAccount.primaryValue == null ? 'Not recorded' : accountMoney(financialAccount.primaryValue, financialAccount.currency)}</strong>
+              <i aria-hidden="true">›</i>
+            </button>
           {/each}
         </div>
       </section>
@@ -167,4 +153,22 @@
 {#if editing}<div class="modal-backdrop" role="presentation" on:click={(event) => event.currentTarget === event.target && !saving && (editing = null)}><div class="modal" role="dialog" aria-modal="true" aria-labelledby="edit-title"><button class="close" on:click={() => editing = null} disabled={saving} aria-label="Close">×</button><p class="eyebrow">Classification</p><h2 id="edit-title">Edit classification</h2><div class="original"><small>Original message</small><p>“{message(editing)}”</p></div><label>Category<input list="categories" bind:value={category} disabled={saving} /><datalist id="categories">{#each categoryOptions as option}<option value={option.name || option.category || option}></option>{/each}</datalist></label><label>Subcategory<input bind:value={subcategory} disabled={saving} /></label>{#if formError}<p class="form-error" role="alert">{formError}</p>{/if}<div class="modal-actions"><button class="secondary" on:click={() => editing = null} disabled={saving}>Cancel</button><button class="primary" on:click={saveEdit} disabled={!changed() || saving}>{saving ? 'Saving…' : 'Save changes'}</button></div></div></div>{/if}
 
 {#if deleting}<div class="modal-backdrop" role="presentation" on:click={(event) => event.currentTarget === event.target && !saving && (deleting = null)}><div class="modal" role="alertdialog" aria-modal="true" aria-labelledby="delete-title"><button class="close" on:click={() => deleting = null} disabled={saving} aria-label="Close">×</button><p class="eyebrow danger-copy">Please confirm</p><h2 id="delete-title">Delete this expense?</h2><div class="delete-preview"><p>“{message(deleting)}”</p><strong>{money(deleting.amount)} · {expenseCategory(deleting)}</strong></div><p class="consequence">This will remove the expense from your reports and restore its account-balance effect when applicable.</p>{#if formError}<p class="form-error" role="alert">{formError}</p>{/if}<div class="modal-actions"><button class="secondary" on:click={() => deleting = null} disabled={saving}>Cancel</button><button class="danger-button" on:click={confirmDelete} disabled={saving}>{saving ? 'Deleting…' : 'Delete expense'}</button></div></div></div>{/if}
+{#if selectedAccount}
+  <div class="account-backdrop" role="presentation" on:click={(event) => event.currentTarget === event.target && (selectedAccount = null)}>
+    <div class:credit-detail={selectedAccount.type === 'CREDIT_CARD'} class="account-detail" role="dialog" aria-modal="true" aria-labelledby="account-detail-title">
+      <button class="account-close" on:click={() => selectedAccount = null} aria-label="Close account details">×</button>
+      <div class="account-detail-top"><span class="account-type">{accountType(selectedAccount.type)}</span><span class="account-dot" aria-hidden="true"></span></div>
+      <h2 id="account-detail-title">{selectedAccount.name}</h2>
+      <p>{selectedAccount.primaryLabel}</p>
+      <strong>{selectedAccount.primaryValue == null ? 'Balance not recorded' : accountMoney(selectedAccount.primaryValue, selectedAccount.currency)}</strong>
+      {#if selectedAccount.type === 'CREDIT_CARD'}
+        {@const usage = creditUsage(selectedAccount)}
+        <div class="credit-details"><div><span>Outstanding</span><b>{selectedAccount.outstanding == null ? '—' : accountMoney(selectedAccount.outstanding, selectedAccount.currency)}</b></div><div><span>Credit limit</span><b>{selectedAccount.creditLimit == null ? '—' : accountMoney(selectedAccount.creditLimit, selectedAccount.currency)}</b></div></div>
+        {#if usage != null}<div class="utilization"><div><span>Credit used</span><b>{usage.toFixed(0)}%</b></div><div class="utilization-bar"><span style={`width:${usage}%`}></span></div></div>{/if}
+      {/if}
+      {#if selectedAccount.overLimit}<div class="over-limit-warning">Over limit by {accountMoney(selectedAccount.overLimitAmount, selectedAccount.currency)}</div>{/if}
+      {#if selectedAccount.lastActivityAt}<p class="last-activity">Last activity {dateLabel(selectedAccount.lastActivityAt)}</p>{/if}
+    </div>
+  </div>
+{/if}
 {#if toast}<div class="toast" role="status">✓ {toast}</div>{/if}

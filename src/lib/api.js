@@ -31,8 +31,12 @@ export async function exchangeMagicLink(token) {
 export const getDashboard = (month) => request(`/api/web/dashboard?month=${encodeURIComponent(month)}`);
 export const getExpenseTaxonomy = () => request('/api/web/expense-taxonomy');
 
-export function getExpenses(month, beforeId, limit = 20) {
-  const params = new URLSearchParams({ month, limit: String(limit) });
+export function getExpenses(filters, beforeId, limit = 20) {
+  const normalizedFilters = typeof filters === 'string' ? { month: filters } : filters;
+  const params = new URLSearchParams({ month: normalizedFilters.month, limit: String(limit) });
+  if (normalizedFilters.accountId != null) params.set('accountId', String(normalizedFilters.accountId));
+  if (normalizedFilters.category) params.set('category', normalizedFilters.category);
+  if (normalizedFilters.subcategory) params.set('subcategory', normalizedFilters.subcategory);
   if (beforeId !== null && beforeId !== undefined) params.set('beforeId', String(beforeId));
   return request(`/api/web/expenses?${params}`);
 }

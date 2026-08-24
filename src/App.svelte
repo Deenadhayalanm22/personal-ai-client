@@ -11,7 +11,37 @@
   let taxonomy = null;
   let taxonomyError = '';
   let error = '';
-  let selectedMonth = new Date().toISOString().slice(0, 7);
+  const currentMonth = new Date().toISOString().slice(0, 7);
+  function filtersFromUrl() {
+    const params = new URLSearchParams(window.location.search);
+    const month = /^\d{4}-\d{2}$/.test(params.get('month') || '') ? params.get('month') : currentMonth;
+    const accountId = Number(params.get('accountId'));
+    return {
+      month,
+      ...(Number.isInteger(accountId) && accountId > 0 ? { accountId } : {}),
+      ...(params.get('category') ? { category: params.get('category') } : {}),
+      ...(params.get('subcategory') ? { subcategory: params.get('subcategory') } : {})
+    };
+  }
+  let filters = filtersFromUrl();
+  let selectedMonth = filters.month;
+
+  function writeFilters(nextFilters, replace = false) {
+    const params = new URLSearchParams();
+    params.set('month', nextFilters.month);
+    if (nextFilters.accountId != null) params.set('accountId', String(nextFilters.accountId));
+    if (nextFilters.category) params.set('category', nextFilters.category);
+    if (nextFilters.subcategory) params.set('subcategory', nextFilters.subcategory);
+    window.history[replace ? 'replaceState' : 'pushState']({}, '', `${window.location.pathname}?${params}`);
+  }
+
+  function updateFilters(nextFilters) {
+    const monthChanged = nextFilters.month !== selectedMonth;
+    filters = nextFilters;
+    selectedMonth = nextFilters.month;
+    writeFilters(nextFilters);
+    if (monthChanged) loadDashboard(selectedMonth);
+  }
 
   async function loadDashboard(month = selectedMonth, { retain = false } = {}) {
     selectedMonth = month; dashboard = 'loading'; error = '';
@@ -45,7 +75,19 @@
     await Promise.all([loadDashboard(selectedMonth), taxonomyRequest]);
   }
 
-  onMount(() => { if (!isPrivacyPage) initialize(); });
+  onMount(() => {
+    if (isPrivacyPage) return;
+    const onPopState = () => {
+      const nextFilters = filtersFromUrl();
+      const monthChanged = nextFilters.month !== selectedMonth;
+      filters = nextFilters;
+      selectedMonth = nextFilters.month;
+      if (monthChanged) loadDashboard(selectedMonth);
+    };
+    window.addEventListener('popstate', onPopState);
+    initialize();
+    return () => window.removeEventListener('popstate', onPopState);
+  });
 </script>
 
 {#if isPrivacyPage}
@@ -62,5 +104,5 @@
     <p>Send <strong>“show my link”</strong> on WhatsApp to receive a new one.</p>
   </main>
 {:else}
-  <Home {data} {dashboard} {error} {taxonomy} {taxonomyError} {selectedMonth} onMonthChange={(month) => loadDashboard(month)} onRefresh={() => loadDashboard(selectedMonth, { retain: true })} onExpired={() => auth = 'expired'} />
+  <Home {data} {dashboard} {error} {taxonomy} {taxonomyError} {selectedMonth} {filters} onFiltersChange={updateFilters} onRefresh={() => loadDashboard(selectedMonth, { retain: true })} onExpired={() => auth = 'expired'} />
 {/if}

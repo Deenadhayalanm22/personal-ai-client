@@ -1,11 +1,11 @@
 <script>
   import { ApiError, deleteExpense, getExpenses, updateClassification } from './lib/api.js';
 
-  export let data; export let dashboard; export let error; export let taxonomy; export let taxonomyError; export let selectedMonth;
-  export let onMonthChange; export let onRefresh; export let onExpired;
+  export let data; export let dashboard; export let error; export let taxonomy; export let taxonomyError; export let selectedMonth; export let filters;
+  export let onFiltersChange; export let onRefresh; export let onExpired;
 
-  let items = []; let nextBeforeId = null; let hydratedData = null;
-  let loadingMore = false; let editing = null; let deleting = null; let selectedAccount = null; let saving = false;
+  let items = []; let nextBeforeId = null; let loadedFilterKey = ''; let filterRequestId = 0; let filterSummary = null;
+  let loadingMore = false; let filtering = false; let editing = null; let deleting = null; let saving = false;
   let formError = ''; let notice = ''; let toast = '';
   let category = ''; let subcategory = '';
 
@@ -21,22 +21,14 @@
   $: subcategoryOptions = selectedTaxonomyCategory?.subcategories || [];
   $: selectedTaxonomySubcategory = subcategoryOptions.find((option) => option.toLocaleLowerCase() === subcategory.trim().toLocaleLowerCase());
   $: classificationValid = Boolean(selectedTaxonomyCategory && selectedTaxonomySubcategory);
-  $: if (data && data !== hydratedData) {
-    hydratedData = data;
-    items = data.recentExpenses?.items || data.recentExpenses?.expenses || (Array.isArray(data.recentExpenses) ? data.recentExpenses : []);
-    nextBeforeId = data.recentExpenses?.nextBeforeId ?? null;
-  }
+  $: filterKey = JSON.stringify(filters);
+  $: if (filterKey && filterKey !== loadedFilterKey) loadFilteredExpenses(filterKey);
+  $: activeAccount = accounts.find((item) => item.id === filters.accountId);
+  $: activeFilterLabels = [activeAccount?.name, filters.category, filters.subcategory].filter(Boolean);
 
   const currency = () => data?.currency || summary.currency || 'INR';
   const money = (value) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: currency(), maximumFractionDigits: 0 }).format(Number(value || 0));
   const accountMoney = (value, accountCurrency = 'INR') => new Intl.NumberFormat('en-IN', { style: 'currency', currency: accountCurrency, maximumFractionDigits: 0 }).format(Number(value));
-  function creditUsage(account) {
-    if (account.type !== 'CREDIT_CARD' || account.creditLimit == null || Number(account.creditLimit) <= 0) return null;
-    return Math.min(100, (Number(account.outstanding || 0) / Number(account.creditLimit)) * 100);
-  }
-  function accountType(type) {
-    return ({ BANK_ACCOUNT: 'Bank account', CREDIT_CARD: 'Credit card', CASH: 'Cash', WALLET: 'Wallet', PAYABLE: 'Payable', RECEIVABLE: 'Receivable' })[type] || 'Account';
-  }
   function accountTransactionLabel(account) {
     const transactions = Number(account.transactionCount ?? 0);
     return `${transactions} ${transactions === 1 ? 'transaction' : 'transactions'} this month`;
@@ -64,6 +56,38 @@
   const percentage = (item) => Number(item.percentage ?? (total ? Number(item.amount || item.total) / total * 100 : 0));
   const categoryName = (item) => item.name || item.category || 'Other';
   const categoryAmount = (item) => item.amount ?? item.total ?? 0;
+  const categoryCount = (item) => Number(item.transactionCount ?? item.count ?? 0);
+  const subcategoriesFor = (item) => item.subcategories || item.subcategoryBreakdown || [];
+  const subcategoryName = (item) => typeof item === 'string' ? item : item.name || item.subcategory;
+
+  function setFilter(patch) { onFiltersChange({ ...filters, ...patch }); }
+  function toggleAccount(item) { setFilter({ accountId: filters.accountId === item.id ? undefined : item.id }); }
+  function toggleCategory(item) {
+    const name = categoryName(item);
+    if (filters.category === name) setFilter({ category: undefined, subcategory: undefined });
+    else setFilter({ category: name, subcategory: undefined });
+  }
+  function toggleSubcategory(item, parent) {
+    const name = subcategoryName(item);
+    setFilter({ category: categoryName(parent), subcategory: filters.subcategory === name ? undefined : name });
+  }
+  function clearFilters() { onFiltersChange({ month: filters.month }); }
+  async function loadFilteredExpenses(key) {
+    loadedFilterKey = key;
+    const requestId = ++filterRequestId;
+    filtering = true; notice = '';
+    try {
+      const page = await getExpenses(filters);
+      if (requestId !== filterRequestId) return;
+      items = page?.items || page?.expenses || [];
+      nextBeforeId = page?.nextBeforeId ?? null;
+      filterSummary = page?.filterSummary || null;
+    } catch (cause) {
+      if (requestId !== filterRequestId) return;
+      if (cause instanceof ApiError && cause.status === 401) onExpired();
+      else notice = cause.message || 'Could not load transactions.';
+    } finally { if (requestId === filterRequestId) filtering = false; }
+  }
 
   function handleApiError(cause, fallback) {
     if (cause instanceof ApiError && cause.status === 401) { onExpired(); return; }
@@ -72,7 +96,7 @@
   async function loadMore() {
     if (loadingMore || nextBeforeId == null) return;
     loadingMore = true; notice = '';
-    try { const page = await getExpenses(selectedMonth, nextBeforeId); items = [...items, ...(page?.items || page?.expenses || [])]; nextBeforeId = page?.nextBeforeId ?? null; }
+    try { const page = await getExpenses(filters, nextBeforeId); items = [...items, ...(page?.items || page?.expenses || [])]; nextBeforeId = page?.nextBeforeId ?? null; }
     catch (cause) { if (cause instanceof ApiError && cause.status === 401) onExpired(); else notice = cause.message || 'Could not load more expenses.'; }
     finally { loadingMore = false; }
   }
@@ -90,20 +114,20 @@
     try {
       const updated = await updateClassification(editing.id, selectedTaxonomyCategory.name, selectedTaxonomySubcategory, editing.version);
       items = items.map((item) => item.id === staleId ? updated : item); editing = null;
-      await onRefresh();
+      await Promise.all([onRefresh(), loadFilteredExpenses(filterKey)]);
     } catch (cause) {
-      if (cause instanceof ApiError && cause.status === 409) { editing = null; notice = 'This expense changed after you opened it. The latest information has been loaded.'; await onRefresh(); }
-      else if (cause instanceof ApiError && cause.status === 404) { editing = null; items = items.filter((item) => item.id !== staleId); await onRefresh(); }
+      if (cause instanceof ApiError && cause.status === 409) { editing = null; notice = 'This expense changed after you opened it. The latest information has been loaded.'; await Promise.all([onRefresh(), loadFilteredExpenses(filterKey)]); }
+      else if (cause instanceof ApiError && cause.status === 404) { editing = null; items = items.filter((item) => item.id !== staleId); await Promise.all([onRefresh(), loadFilteredExpenses(filterKey)]); }
       else handleApiError(cause, 'Could not save this expense.');
     } finally { saving = false; }
   }
   async function confirmDelete() {
     if (!deleting || saving) return;
     const staleId = deleting.id; saving = true; formError = '';
-    try { await deleteExpense(deleting.id, deleting.version); items = items.filter((item) => item.id !== staleId); deleting = null; toast = 'Expense deleted'; setTimeout(() => toast = '', 2600); await onRefresh(); }
+    try { await deleteExpense(deleting.id, deleting.version); items = items.filter((item) => item.id !== staleId); deleting = null; toast = 'Expense deleted'; setTimeout(() => toast = '', 2600); await Promise.all([onRefresh(), loadFilteredExpenses(filterKey)]); }
     catch (cause) {
-      if (cause instanceof ApiError && cause.status === 404) { items = items.filter((item) => item.id !== staleId); deleting = null; await onRefresh(); }
-      else if (cause instanceof ApiError && cause.status === 409) { deleting = null; notice = 'This expense changed after you opened it. The latest information has been loaded.'; await onRefresh(); }
+      if (cause instanceof ApiError && cause.status === 404) { items = items.filter((item) => item.id !== staleId); deleting = null; await Promise.all([onRefresh(), loadFilteredExpenses(filterKey)]); }
+      else if (cause instanceof ApiError && cause.status === 409) { deleting = null; notice = 'This expense changed after you opened it. The latest information has been loaded.'; await Promise.all([onRefresh(), loadFilteredExpenses(filterKey)]); }
       else handleApiError(cause, 'Could not delete this expense.');
     } finally { saving = false; }
   }
@@ -111,7 +135,7 @@
 
 <header class="topbar">
   <a class="brand" href="/" aria-label="Expense AI dashboard"><span class="logo">₹</span><span>Expense AI</span></a>
-  <label class="month-picker"><span>Month</span><input aria-label="Select dashboard month" type="month" value={selectedMonth} on:change={(event) => onMonthChange(event.currentTarget.value)} /></label>
+  <label class="month-picker"><span>Month</span><input aria-label="Select dashboard month" type="month" value={selectedMonth} on:change={(event) => onFiltersChange({ ...filters, month: event.currentTarget.value })} /></label>
 </header>
 
 <main class="dashboard-shell">
@@ -132,10 +156,10 @@
 
     {#if accounts.length}
       <section class="wallet-strip" aria-labelledby="accounts-heading">
-        <div class="wallet-label"><span class="wallet-icon" aria-hidden="true">₹</span><div><h2 id="accounts-heading">Your accounts</h2><p>Tap a card for details</p></div></div>
+        <div class="wallet-label"><span class="wallet-icon" aria-hidden="true">₹</span><div><h2 id="accounts-heading">Your accounts</h2><p>Tap a card to filter</p></div></div>
         <div class="wallet-cards">
           {#each accounts as financialAccount (financialAccount.id)}
-            <button class:credit-chip={financialAccount.type === 'CREDIT_CARD'} class:chip-warning={financialAccount.overLimit} class="account-chip" on:click={() => selectedAccount = financialAccount} aria-label={`View ${financialAccount.name} details`}>
+            <button class:credit-chip={financialAccount.type === 'CREDIT_CARD'} class:chip-warning={financialAccount.overLimit} class:active-filter={filters.accountId === financialAccount.id} class="account-chip" on:click={() => toggleAccount(financialAccount)} aria-pressed={filters.accountId === financialAccount.id} aria-label={`Filter transactions by ${financialAccount.name}`}>
               <span><b>{financialAccount.name}</b><small>{financialAccount.primaryLabel}</small><small class="account-transactions">{accountTransactionLabel(financialAccount)}</small></span>
               <strong>{financialAccount.primaryValue == null ? 'Not recorded' : accountMoney(financialAccount.primaryValue, financialAccount.currency)}</strong>
               <i aria-hidden="true">›</i>
@@ -150,11 +174,13 @@
     {:else}
       <section class="content-grid">
       <article class="panel category-panel"><div class="panel-heading"><div><p class="eyebrow">Breakdown</p><h2>Spending by category</h2></div><span>{normalizedCategories.length} categories</span></div>
-        <div class="category-list">{#each normalizedCategories as item, index}<div class="category-row"><div class="category-line"><span><i style={`--dot:${index}`}></i>{categoryName(item)}</span><strong>{money(categoryAmount(item))}</strong></div><div class="bar"><span style={`width:${Math.max(2, percentage(item))}%`}></span></div><small>{percentage(item).toFixed(0)}% of total</small></div>{/each}</div>
+        <div class="category-list">{#each normalizedCategories as item, index}<div class:active-category={filters.category === categoryName(item)} class="category-row"><button class="category-filter" on:click={() => toggleCategory(item)} aria-pressed={filters.category === categoryName(item)}><div class="category-line"><span><i style={`--dot:${index}`}></i>{categoryName(item)}</span><strong>{money(categoryAmount(item))}</strong></div><div class="bar"><span style={`width:${Math.max(2, percentage(item))}%`}></span></div><small>{percentage(item).toFixed(0)}% of total{categoryCount(item) ? ` · ${categoryCount(item)} transactions` : ''}</small></button>{#if filters.category === categoryName(item) && subcategoriesFor(item).length}<div class="subcategory-list">{#each subcategoriesFor(item) as subcategory}<button class:active-filter={filters.subcategory === subcategoryName(subcategory)} on:click={() => toggleSubcategory(subcategory, item)} aria-pressed={filters.subcategory === subcategoryName(subcategory)}><span>{subcategoryName(subcategory)}</span>{#if typeof subcategory !== 'string'}<small>{categoryCount(subcategory)} {categoryCount(subcategory) === 1 ? 'transaction' : 'transactions'}</small><strong>{money(categoryAmount(subcategory))}</strong>{/if}</button>{/each}</div>{/if}</div>{/each}</div>
       </article>
 
-      <article class="panel activity-panel"><div class="panel-heading"><div><p class="eyebrow">Activity</p><h2>Recent expenses</h2></div><span>Latest first</span></div>
-        <div class="expense-list">{#each items as item (item.id)}<article class="expense-item"><div class="expense-top"><strong>{money(item.amount)}</strong><time datetime={itemDate(item)}>{dateLabel(itemDate(item))}</time></div><p class="message">“{message(item)}”</p><div class="expense-meta"><div><b>{expenseCategory(item)} <span>›</span> {expenseSubcategory(item)}</b><small>{account(item)}</small></div>{#if item.needsReview}<span class="review">Needs review</span>{/if}</div><div class="expense-actions"><button class="text-button" on:click={() => openEdit(item)}>Edit category</button><button class="text-button delete" on:click={() => { deleting = item; formError = ''; }}>Delete</button></div></article>{/each}</div>
+      <article class="panel activity-panel"><div class="panel-heading"><div><p class="eyebrow">Activity</p><h2>{activeFilterLabels.length ? 'Transactions' : 'Recent expenses'}</h2>{#if activeFilterLabels.length}<p class="filter-description">{activeFilterLabels.join(' · ')}</p>{/if}</div><span>{activeFilterLabels.length && filterSummary ? `${filterSummary.transactionCount} ${Number(filterSummary.transactionCount) === 1 ? 'transaction' : 'transactions'} · ${money(filterSummary.totalAmount)}` : 'Latest first'}</span></div>
+        {#if activeFilterLabels.length}<div class="filter-chips">{#if activeAccount}<button on:click={() => setFilter({ accountId: undefined })}>{activeAccount.name} <span>×</span></button>{/if}{#if filters.category}<button on:click={() => setFilter({ category: undefined, subcategory: undefined })}>{filters.category} <span>×</span></button>{/if}{#if filters.subcategory}<button on:click={() => setFilter({ subcategory: undefined })}>{filters.subcategory} <span>×</span></button>{/if}<button class="clear-filters" on:click={clearFilters}>Clear all</button></div>{/if}
+        {#if filtering}<p class="filter-loading" aria-live="polite">Loading transactions…</p>{/if}
+        <div class:filtering class="expense-list">{#each items as item (item.id)}<article class="expense-item"><div class="expense-top"><strong>{money(item.amount)}</strong><time datetime={itemDate(item)}>{dateLabel(itemDate(item))}</time></div><p class="message">“{message(item)}”</p><div class="expense-meta"><div><b>{expenseCategory(item)} <span>›</span> {expenseSubcategory(item)}</b><small>{account(item)}</small></div>{#if item.needsReview}<span class="review">Needs review</span>{/if}</div><div class="expense-actions"><button class="text-button" on:click={() => openEdit(item)}>Edit category</button><button class="text-button delete" on:click={() => { deleting = item; formError = ''; }}>Delete</button></div></article>{/each}</div>
         {#if nextBeforeId != null}<button class="load-more" on:click={loadMore} disabled={loadingMore}>{loadingMore ? 'Loading…' : 'Load more expenses'}</button>{/if}
         {#if notice}<p class="inline-error">{notice}</p>{/if}
       </article>
@@ -166,22 +192,4 @@
 {#if editing}<div class="modal-backdrop" role="presentation" on:click={(event) => event.currentTarget === event.target && !saving && (editing = null)}><div class="modal" role="dialog" aria-modal="true" aria-labelledby="edit-title"><button class="close" on:click={() => editing = null} disabled={saving} aria-label="Close">×</button><p class="eyebrow">Classification</p><h2 id="edit-title">Edit classification</h2><div class="original"><small>Original message</small><p>“{message(editing)}”</p></div><label>Category<input list="expense-categories" value={category} on:input={(event) => onCategoryChange(event.currentTarget.value)} disabled={saving || !categoryOptions.length} placeholder="Search or select category" autocomplete="off" /><datalist id="expense-categories">{#each categoryOptions as option}<option value={option.name}></option>{/each}</datalist></label><label>Subcategory<input list="expense-subcategories" bind:value={subcategory} on:input={() => formError = ''} disabled={saving || !selectedTaxonomyCategory} placeholder="Search or select subcategory" autocomplete="off" /><datalist id="expense-subcategories">{#each subcategoryOptions as option}<option value={option}></option>{/each}</datalist></label>{#if taxonomyError}<p class="form-error" role="alert">Categories are unavailable right now. {taxonomyError}</p>{/if}{#if formError}<p class="form-error" role="alert">{formError}</p>{/if}<div class="modal-actions"><button class="secondary" on:click={() => editing = null} disabled={saving}>Cancel</button><button class="primary" on:click={saveEdit} disabled={!changed() || !classificationValid || saving}>{saving ? 'Saving…' : 'Save changes'}</button></div></div></div>{/if}
 
 {#if deleting}<div class="modal-backdrop" role="presentation" on:click={(event) => event.currentTarget === event.target && !saving && (deleting = null)}><div class="modal" role="alertdialog" aria-modal="true" aria-labelledby="delete-title"><button class="close" on:click={() => deleting = null} disabled={saving} aria-label="Close">×</button><p class="eyebrow danger-copy">Please confirm</p><h2 id="delete-title">Delete this expense?</h2><div class="delete-preview"><p>“{message(deleting)}”</p><strong>{money(deleting.amount)} · {expenseCategory(deleting)}</strong></div><p class="consequence">This will remove the expense from your reports and restore its account-balance effect when applicable.</p>{#if formError}<p class="form-error" role="alert">{formError}</p>{/if}<div class="modal-actions"><button class="secondary" on:click={() => deleting = null} disabled={saving}>Cancel</button><button class="danger-button" on:click={confirmDelete} disabled={saving}>{saving ? 'Deleting…' : 'Delete expense'}</button></div></div></div>{/if}
-{#if selectedAccount}
-  <div class="account-backdrop" role="presentation" on:click={(event) => event.currentTarget === event.target && (selectedAccount = null)}>
-    <div class:credit-detail={selectedAccount.type === 'CREDIT_CARD'} class="account-detail" role="dialog" aria-modal="true" aria-labelledby="account-detail-title">
-      <button class="account-close" on:click={() => selectedAccount = null} aria-label="Close account details">×</button>
-      <div class="account-detail-top"><span class="account-type">{accountType(selectedAccount.type)}</span><span class="account-dot" aria-hidden="true"></span></div>
-      <h2 id="account-detail-title">{selectedAccount.name}</h2>
-      <p>{selectedAccount.primaryLabel}</p>
-      <strong>{selectedAccount.primaryValue == null ? 'Balance not recorded' : accountMoney(selectedAccount.primaryValue, selectedAccount.currency)}</strong>
-      {#if selectedAccount.type === 'CREDIT_CARD'}
-        {@const usage = creditUsage(selectedAccount)}
-        <div class="credit-details"><div><span>Outstanding</span><b>{selectedAccount.outstanding == null ? '—' : accountMoney(selectedAccount.outstanding, selectedAccount.currency)}</b></div><div><span>Credit limit</span><b>{selectedAccount.creditLimit == null ? '—' : accountMoney(selectedAccount.creditLimit, selectedAccount.currency)}</b></div></div>
-        {#if usage != null}<div class="utilization"><div><span>Credit used</span><b>{usage.toFixed(0)}%</b></div><div class="utilization-bar"><span style={`width:${usage}%`}></span></div></div>{/if}
-      {/if}
-      {#if selectedAccount.overLimit}<div class="over-limit-warning">Over limit by {accountMoney(selectedAccount.overLimitAmount, selectedAccount.currency)}</div>{/if}
-      {#if selectedAccount.lastActivityAt}<p class="last-activity">Last activity {dateLabel(selectedAccount.lastActivityAt)}</p>{/if}
-    </div>
-  </div>
-{/if}
 {#if toast}<div class="toast" role="status">✓ {toast}</div>{/if}

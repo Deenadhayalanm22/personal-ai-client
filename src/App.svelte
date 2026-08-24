@@ -2,59 +2,55 @@
   import { onMount } from 'svelte';
   import Home from './Home.svelte';
   import PrivacyPolicy from './PrivacyPolicy.svelte';
-  import { exchangeMagicLink, getMonthlyExpenses } from './lib/api.js';
+  import { ApiError, exchangeMagicLink, getDashboard } from './lib/api.js';
 
-  let loading = true;
-  let expenses = null;
-  let error = '';
   const isPrivacyPage = window.location.pathname === '/privacy-policy';
+  let auth = 'checking';
+  let dashboard = 'loading';
+  let data = null;
+  let error = '';
+  let selectedMonth = new Date().toISOString().slice(0, 7);
 
-  async function initializeDashboard(month) {
-    loading = true;
-    error = '';
+  async function loadDashboard(month = selectedMonth, { retain = false } = {}) {
+    selectedMonth = month; dashboard = 'loading'; error = '';
+    if (!retain) data = null;
     try {
-      const token = new URLSearchParams(window.location.search).get('token');
-      if (token) await exchangeMagicLink(token);
-      expenses = await getMonthlyExpenses(month);
+      data = await getDashboard(month);
+      const count = Number(data?.summary?.transactionCount ?? data?.transactionCount ?? data?.recentExpenses?.items?.length ?? 0);
+      dashboard = count === 0 ? 'empty' : 'ready';
     } catch (cause) {
-      expenses = null;
-      error = cause instanceof Error ? cause.message : 'Something went wrong.';
-    } finally {
-      loading = false;
+      if (cause instanceof ApiError && cause.status === 401) auth = 'expired';
+      else { dashboard = 'error'; error = cause instanceof Error ? cause.message : 'Something went wrong. Please try again.'; }
     }
   }
 
-  onMount(() => {
-    if (!isPrivacyPage) initializeDashboard();
-  });
+  async function initialize() {
+    const token = new URLSearchParams(window.location.search).get('token');
+    try {
+      if (token) await exchangeMagicLink(token);
+      auth = 'authenticated';
+      await loadDashboard(selectedMonth);
+    } catch (cause) {
+      auth = 'expired';
+    }
+  }
+
+  onMount(() => { if (!isPrivacyPage) initialize(); });
 </script>
 
 {#if isPrivacyPage}
   <PrivacyPolicy />
-{:else}
-  <header class="site-header">
-    <a class="brand" href="/" aria-label="Voice Expense home">
-      <span class="brand-mark" aria-hidden="true">✓</span>
-      <span><strong>Voice Expense</strong><small>Monthly spending overview</small></span>
-    </a>
-  </header>
-
-  <main>
-    {#if loading}
-      <section class="state-card" aria-live="polite">
-        <span class="spinner" aria-hidden="true"></span>
-        <h1>Loading your expenses…</h1>
-        <p>Securely connecting to your account.</p>
-      </section>
-    {:else if error}
-      <section class="state-card error" role="alert">
-        <span class="state-icon" aria-hidden="true">!</span>
-        <h1>We couldn’t open your dashboard</h1>
-        <p>{error}</p>
-        <p class="hint">Open the latest access link sent to you on WhatsApp.</p>
-      </section>
-    {:else if expenses}
-      <Home {expenses} onMonthChange={initializeDashboard} />
-    {/if}
+{:else if auth === 'checking'}
+  <main class="center-page" aria-live="polite">
+    <span class="brand-orb" aria-hidden="true">₹</span><span class="spinner" aria-hidden="true"></span>
+    <h1>Opening your dashboard…</h1><p>Securing your private expense overview.</p>
   </main>
+{:else if auth === 'expired'}
+  <main class="center-page expired" role="alert">
+    <span class="brand-orb" aria-hidden="true">↗</span><p class="eyebrow">Access link</p>
+    <h1>This link has expired or was already used.</h1>
+    <p>Send <strong>“show my link”</strong> on WhatsApp to receive a new one.</p>
+  </main>
+{:else}
+  <Home {data} {dashboard} {error} {selectedMonth} onMonthChange={(month) => loadDashboard(month)} onRefresh={() => loadDashboard(selectedMonth, { retain: true })} onExpired={() => auth = 'expired'} />
 {/if}

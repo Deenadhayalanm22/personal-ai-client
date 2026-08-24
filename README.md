@@ -1,4 +1,4 @@
-# Voice Expense frontend
+# Expense AI frontend
 
 A Svelte/Vite dashboard that authenticates users from a single-use WhatsApp magic link and displays their monthly expenses.
 

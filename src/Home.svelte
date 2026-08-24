@@ -10,6 +10,7 @@
   let category = ''; let subcategory = '';
 
   $: summary = data?.summary || {};
+  $: accounts = Array.isArray(data?.accounts) ? data.accounts : [];
   $: categories = summary?.categories || data?.categories || data?.categoryBreakdown || [];
   $: normalizedCategories = Array.isArray(categories) ? categories : Object.entries(categories).map(([name, amount]) => ({ name, amount }));
   $: total = Number(summary.total ?? summary.totalSpent ?? data?.totalSpent ?? data?.total ?? 0);
@@ -24,6 +25,14 @@
 
   const currency = () => data?.currency || summary.currency || 'INR';
   const money = (value) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: currency(), maximumFractionDigits: 0 }).format(Number(value || 0));
+  const accountMoney = (value, accountCurrency = 'INR') => new Intl.NumberFormat('en-IN', { style: 'currency', currency: accountCurrency, maximumFractionDigits: 0 }).format(Number(value));
+  function creditUsage(account) {
+    if (account.type !== 'CREDIT_CARD' || account.creditLimit == null || Number(account.creditLimit) <= 0) return null;
+    return Math.min(100, (Number(account.outstanding || 0) / Number(account.creditLimit)) * 100);
+  }
+  function accountType(type) {
+    return ({ BANK_ACCOUNT: 'Bank account', CREDIT_CARD: 'Credit card', CASH: 'Cash', WALLET: 'Wallet', PAYABLE: 'Payable', RECEIVABLE: 'Receivable' })[type] || 'Account';
+  }
   function monthLabel(month) { const [year, number] = month.split('-').map(Number); return new Intl.DateTimeFormat('en-IN', { month: 'long', year: 'numeric' }).format(new Date(year, number - 1)); }
   function dateLabel(value) {
     if (!value) return '';
@@ -37,7 +46,13 @@
   const expenseSubcategory = (item) => item.subcategory?.name || item.subcategory || 'General';
   const itemDate = (item) => item.transactionTime || item.date || item.transactionDate || item.createdAt;
   const message = (item) => item.originalMessage || item.message || item.description || 'Expense';
-  const account = (item) => item.sourceAccount || item.account?.name || item.accountName || item.account || 'Account not specified';
+  function account(item) {
+    const source = item.sourceAccount ?? item.source_account ?? item.sourceAccountName;
+    if (typeof source === 'string' && source.trim()) return source.trim();
+    if (source && typeof source === 'object') return source.name || source.displayName || source.label || 'Account not specified';
+    if (typeof item.account === 'string' && item.account.trim()) return item.account.trim();
+    return item.account?.name || item.account?.displayName || item.accountName || 'Account not specified';
+  }
   const percentage = (item) => Number(item.percentage ?? (total ? Number(item.amount || item.total) / total * 100 : 0));
   const categoryName = (item) => item.name || item.category || 'Other';
   const categoryAmount = (item) => item.amount ?? item.total ?? 0;
@@ -95,8 +110,6 @@
   {#if dashboard === 'loading' && !data}
     <section class="metric-grid" aria-label="Loading summary">{#each [1,2,3] as _}<div class="metric skeleton"><i></i><b></b><span></span></div>{/each}</section>
     <section class="content-grid"><div class="panel skeleton-panel"><i></i><b></b><b></b><b></b></div><div class="panel skeleton-panel"><i></i><b></b><b></b><b></b></div></section>
-  {:else if dashboard === 'empty'}
-    <section class="empty-month"><span class="empty-icon">₹</span><h2>No expenses recorded for {monthLabel(selectedMonth)}.</h2><p>Record an expense through WhatsApp and it will appear here.</p></section>
   {:else if data}
     <section class="metric-grid">
       <article class="metric accent"><p>Total spent</p><strong>{money(total)}</strong><span>Across all recorded expenses</span></article>
@@ -104,7 +117,39 @@
       <article class="metric"><p>Largest category</p><strong class="category-value">{largestCategory}</strong><span>{normalizedCategories[0] ? money(categoryAmount(normalizedCategories[0])) : 'No spending yet'}</span></article>
     </section>
 
-    <section class="content-grid">
+    {#if accounts.length}
+      <section class="accounts-section" aria-labelledby="accounts-heading">
+        <div class="section-title"><div><p class="eyebrow">Balances</p><h2 id="accounts-heading">Your accounts</h2></div><span>{accounts.length} active</span></div>
+        <div class="account-grid">
+          {#each accounts as financialAccount (financialAccount.id)}
+            <article class:credit-card={financialAccount.type === 'CREDIT_CARD'} class:over-limit={financialAccount.overLimit} class="account-card">
+              <div class="account-card-top"><span class="account-type">{accountType(financialAccount.type)}</span><span class="account-dot" aria-hidden="true"></span></div>
+              <h3>{financialAccount.name}</h3>
+              <p>{financialAccount.primaryLabel}</p>
+              {#if financialAccount.primaryValue == null}
+                <strong class="balance-missing">Balance not recorded</strong>
+              {:else}
+                <strong>{accountMoney(financialAccount.primaryValue, financialAccount.currency)}</strong>
+              {/if}
+              {#if financialAccount.type === 'CREDIT_CARD'}
+                {@const usage = creditUsage(financialAccount)}
+                <div class="credit-details">
+                  <div><span>Outstanding</span><b>{financialAccount.outstanding == null ? '—' : accountMoney(financialAccount.outstanding, financialAccount.currency)}</b></div>
+                  <div><span>Credit limit</span><b>{financialAccount.creditLimit == null ? '—' : accountMoney(financialAccount.creditLimit, financialAccount.currency)}</b></div>
+                </div>
+                {#if usage != null}<div class="utilization"><div><span>Credit used</span><b>{usage.toFixed(0)}%</b></div><div class="utilization-bar"><span style={`width:${usage}%`}></span></div></div>{/if}
+              {/if}
+              {#if financialAccount.overLimit}<div class="over-limit-warning">Over limit by {accountMoney(financialAccount.overLimitAmount, financialAccount.currency)}</div>{/if}
+            </article>
+          {/each}
+        </div>
+      </section>
+    {/if}
+
+    {#if dashboard === 'empty'}
+      <section class="empty-month"><span class="empty-icon">₹</span><h2>No expenses recorded for {monthLabel(selectedMonth)}.</h2><p>Record an expense through WhatsApp and it will appear here.</p></section>
+    {:else}
+      <section class="content-grid">
       <article class="panel category-panel"><div class="panel-heading"><div><p class="eyebrow">Breakdown</p><h2>Spending by category</h2></div><span>{normalizedCategories.length} categories</span></div>
         <div class="category-list">{#each normalizedCategories as item, index}<div class="category-row"><div class="category-line"><span><i style={`--dot:${index}`}></i>{categoryName(item)}</span><strong>{money(categoryAmount(item))}</strong></div><div class="bar"><span style={`width:${Math.max(2, percentage(item))}%`}></span></div><small>{percentage(item).toFixed(0)}% of total</small></div>{/each}</div>
       </article>
@@ -114,7 +159,8 @@
         {#if nextBeforeId != null}<button class="load-more" on:click={loadMore} disabled={loadingMore}>{loadingMore ? 'Loading…' : 'Load more expenses'}</button>{/if}
         {#if notice}<p class="inline-error">{notice}</p>{/if}
       </article>
-    </section>
+      </section>
+    {/if}
   {/if}
 </main>
 

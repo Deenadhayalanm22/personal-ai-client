@@ -10,9 +10,9 @@
   let category = ''; let subcategory = '';
 
   $: summary = data?.summary || {};
-  $: categories = data?.categories || data?.categoryBreakdown || [];
+  $: categories = summary?.categories || data?.categories || data?.categoryBreakdown || [];
   $: normalizedCategories = Array.isArray(categories) ? categories : Object.entries(categories).map(([name, amount]) => ({ name, amount }));
-  $: total = Number(summary.totalSpent ?? data?.totalSpent ?? data?.total ?? 0);
+  $: total = Number(summary.total ?? summary.totalSpent ?? data?.totalSpent ?? data?.total ?? 0);
   $: count = Number(summary.transactionCount ?? data?.transactionCount ?? items.length);
   $: largestCategory = normalizedCategories[0]?.name || normalizedCategories[0]?.category || '—';
   $: categoryOptions = data?.classificationOptions?.categories || data?.availableCategories || normalizedCategories;

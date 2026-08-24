@@ -28,7 +28,7 @@ export async function exchangeMagicLink(token) {
   finally { window.history.replaceState({}, '', window.location.pathname); }
 }
 
-export const getDashboard = (month) => request(`/api/web/dashboard?month=${encodeURIComponent(month)}`);
+export const getDashboard = (month) => request(`/api/web/finance/dashboard?month=${encodeURIComponent(month)}`);
 export const getExpenseTaxonomy = () => request('/api/web/expense-taxonomy');
 
 export function getExpenses(month, beforeId, limit = 20) {

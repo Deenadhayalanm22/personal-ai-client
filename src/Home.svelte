@@ -37,6 +37,10 @@
   function accountType(type) {
     return ({ BANK_ACCOUNT: 'Bank account', CREDIT_CARD: 'Credit card', CASH: 'Cash', WALLET: 'Wallet', PAYABLE: 'Payable', RECEIVABLE: 'Receivable' })[type] || 'Account';
   }
+  function accountTransactionLabel(account) {
+    const transactions = Number(account.transactionCount ?? 0);
+    return `${transactions} ${transactions === 1 ? 'transaction' : 'transactions'} this month`;
+  }
   function monthLabel(month) { const [year, number] = month.split('-').map(Number); return new Intl.DateTimeFormat('en-IN', { month: 'long', year: 'numeric' }).format(new Date(year, number - 1)); }
   function dateLabel(value) {
     if (!value) return '';
@@ -132,7 +136,7 @@
         <div class="wallet-cards">
           {#each accounts as financialAccount (financialAccount.id)}
             <button class:credit-chip={financialAccount.type === 'CREDIT_CARD'} class:chip-warning={financialAccount.overLimit} class="account-chip" on:click={() => selectedAccount = financialAccount} aria-label={`View ${financialAccount.name} details`}>
-              <span><b>{financialAccount.name}</b><small>{financialAccount.primaryLabel}</small></span>
+              <span><b>{financialAccount.name}</b><small>{financialAccount.primaryLabel}</small><small class="account-transactions">{accountTransactionLabel(financialAccount)}</small></span>
               <strong>{financialAccount.primaryValue == null ? 'Not recorded' : accountMoney(financialAccount.primaryValue, financialAccount.currency)}</strong>
               <i aria-hidden="true">›</i>
             </button>

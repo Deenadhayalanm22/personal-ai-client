@@ -1,105 +1,60 @@
 <script>
   import { onMount } from 'svelte';
   import Home from './Home.svelte';
-
   import PrivacyPolicy from './PrivacyPolicy.svelte';
-  
-  // Simple routing
-  let currentRoute = $state(window.location.hash.slice(1) || '/');
-  
-  onMount(() => {
-    const handleHashChange = () => {
-      currentRoute = window.location.hash.slice(1) || '/';
-    };
-    window.addEventListener('hashchange', handleHashChange);
-    return () => window.removeEventListener('hashchange', handleHashChange);
-  });
+  import { exchangeMagicLink, getMonthlyExpenses } from './lib/api.js';
 
-  // accessor object for two-way binding to the recorder's `text` property
-  const textAccessor = {
-    get: () => (recorderRef ? recorderRef.text : ''),
-    set: (v) => { if (recorderRef) recorderRef.text = v; }
-  };
-  function safeSend() { return null; }
+  let loading = true;
+  let expenses = null;
+  let error = '';
+  const isPrivacyPage = window.location.pathname === '/privacy-policy';
+
+  async function initializeDashboard(month) {
+    loading = true;
+    error = '';
+    try {
+      const token = new URLSearchParams(window.location.search).get('token');
+      if (token) await exchangeMagicLink(token);
+      expenses = await getMonthlyExpenses(month);
+    } catch (cause) {
+      expenses = null;
+      error = cause instanceof Error ? cause.message : 'Something went wrong.';
+    } finally {
+      loading = false;
+    }
+  }
+
+  onMount(() => {
+    if (!isPrivacyPage) initializeDashboard();
+  });
 </script>
 
-<style>
-  :global(body) {
-    margin: 0;
-    font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
-    background: #0f1724;
-    color: #eef2ff;
-  }
+{#if isPrivacyPage}
+  <PrivacyPolicy />
+{:else}
+  <header class="site-header">
+    <a class="brand" href="/" aria-label="Voice Expense home">
+      <span class="brand-mark" aria-hidden="true">✓</span>
+      <span><strong>Voice Expense</strong><small>Monthly spending overview</small></span>
+    </a>
+  </header>
 
-  header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 1.25rem 1.5rem;
-    border-bottom: 1px solid rgba(255,255,255,0.04);
-    background: linear-gradient(90deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
-    position: sticky;
-    top: 0;
-    z-index: 40;
-    backdrop-filter: blur(6px);
-  }
-
-  .brand {
-    display:flex;
-    gap:.6rem;
-    align-items:center;
-  }
-
-  .brand h1 {
-    margin:0;
-    font-size:1.1rem;
-    letter-spacing: -0.4px;
-  }
-
-  /* removed top navigation - showing summary + recorder in layout */
-
-  main {
-    max-width: 1100px;
-    margin: 1.25rem auto;
-    padding: 0 1rem;
-  }
-
-  .layout {
-    display: grid;
-    grid-template-columns: 1fr 420px;
-    gap: 1rem;
-    align-items: start;
-  }
-
-  @media (max-width: 980px) {
-    .layout { grid-template-columns: 1fr; }
-  }
-
-  /* small screen tweaks */
-  @media (max-width:600px) {
-    header {
-      flex-direction: column;
-      gap: 0.6rem;
-      align-items: flex-start;
-    }
-    .brand h1 { font-size: 1rem; }
-  }
-</style>
-
-<header>
-  <div class="brand">
-  <svg width="46" height="46" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect width="24" height="24" rx="6" fill="#667eea"/><path d="M7 14l3 3 7-9" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-    <div>
-      <h1 style="font-size:1.25rem; margin:0">Voice Expense AI</h1>
-      <div style="font-size:.85rem; color:#9aa3d6">Auto summary + quick record</div>
-    </div>
-  </div>
-</header>
-
-<main>
-{#if currentRoute === '/privacy-policy'}
-    <PrivacyPolicy />
-  {:else}
-  <Home />
-  {/if}
-</main>
+  <main>
+    {#if loading}
+      <section class="state-card" aria-live="polite">
+        <span class="spinner" aria-hidden="true"></span>
+        <h1>Loading your expenses…</h1>
+        <p>Securely connecting to your account.</p>
+      </section>
+    {:else if error}
+      <section class="state-card error" role="alert">
+        <span class="state-icon" aria-hidden="true">!</span>
+        <h1>We couldn’t open your dashboard</h1>
+        <p>{error}</p>
+        <p class="hint">Open the latest access link sent to you on WhatsApp.</p>
+      </section>
+    {:else if expenses}
+      <Home {expenses} onMonthChange={initializeDashboard} />
+    {/if}
+  </main>
+{/if}

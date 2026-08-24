@@ -1,53 +1,51 @@
-// Centralized API config and helpers
-export const BASE = (import.meta.env.VITE_API_BASE || 'http://localhost:8080');
+export const API_URL = (import.meta.env.VITE_API_BASE || 'http://localhost:8080').replace(/\/$/, '');
 
-export async function postExpense(text) {
-  const res = await fetch(`${BASE}/api/expense`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text })
-  });
-  return res;
-}
-
-// New API: process speech through the assistant endpoint
-export async function processSpeech(text, userId = 'demo-user') {
-  const res = await fetch(`${BASE}/api/v1/process`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text, userId })
-  });
-  // try to parse JSON, but return raw response object if parsing fails
-  try {
-    const json = await res.json();
-    return { ok: res.ok, status: res.status, data: json };
-  } catch (e) {
-    const txt = await res.text().catch(()=>'');
-    return { ok: res.ok, status: res.status, data: txt };
+export class ApiError extends Error {
+  constructor(message, status) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
   }
 }
 
+async function request(path, options = {}) {
+  const response = await fetch(`${API_URL}${path}`, {
+    credentials: 'include',
+    ...options,
+  });
 
-
-export async function deleteTransaction(id) {
-  try {
-    const res = await fetch(`${BASE}/api/v1/transactions/${encodeURIComponent(id)}`, { method: 'DELETE' });
-    return res.ok;
-  } catch (e) { console.error('deleteTransaction', e); return false; }
+  if (response.status === 401) {
+    throw new ApiError('Your session has expired. Request a new WhatsApp link.', 401);
+  }
+  if (!response.ok) {
+    throw new ApiError('Unable to load expenses.', response.status);
+  }
+  return response.json();
 }
 
+export async function exchangeMagicLink(token) {
+  if (!token) throw new ApiError('Magic-link token is missing.');
 
+  const response = await fetch(`${API_URL}/api/web/auth/magic-link`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token }),
+  });
 
-// New single-summary endpoint that returns today's total, month total, categories and recent transactions
-export async function getExpenseSummary() {
-  try {
-    const res = await fetch(`${BASE}/api/expense/summary`);
-    if (!res.ok) throw new Error(`Status ${res.status}`);
-    const json = await res.json();
-    return json;
-  } catch (e) {
-    console.error('getExpenseSummary', e);
-    // return a safe default shape
-    return { todayTotal: 0, monthTotal: 0, categoryTotals: {}, recentTransactions: [] };
+  // Never leave a single-use credential in browser history or the address bar.
+  window.history.replaceState({}, '', window.location.pathname);
+
+  if (response.status === 401) {
+    throw new ApiError('This link is invalid, expired, or already used.', 401);
   }
+  if (!response.ok) {
+    throw new ApiError('Unable to authenticate.', response.status);
+  }
+  return response.json();
+}
+
+export function getMonthlyExpenses(month) {
+  const query = month ? `?month=${encodeURIComponent(month)}` : '';
+  return request(`/api/web/expenses/monthly${query}`);
 }

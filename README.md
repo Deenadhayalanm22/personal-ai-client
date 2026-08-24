@@ -28,7 +28,7 @@ Authenticated users can also open `/` directly while their session cookie remain
 
 The host must serve `index.html` for `/`, `/access`, and `/privacy-policy` because routing is handled by the client. Configure the backend CORS and cookie settings for the deployed frontend origin as described in the backend contract.
 
-For Render, `render.yaml` includes the required SPA rewrite from `/*` to `/index.html`. If the site was created manually instead of from this Blueprint, add the same rule under **Redirects/Rewrites** in the Render dashboard.
+For Render, `render.yaml` includes the required SPA rewrite from `/*` to `/index.html`. The build also emits physical `access/index.html` and `privacy-policy/index.html` entry points so these routes work on manually created static sites before a rewrite is configured.
 
 ## Build
 

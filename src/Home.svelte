@@ -35,9 +35,9 @@
   }
   const expenseCategory = (item) => item.category?.name || item.category || 'Uncategorised';
   const expenseSubcategory = (item) => item.subcategory?.name || item.subcategory || 'General';
-  const itemDate = (item) => item.date || item.transactionDate || item.createdAt;
+  const itemDate = (item) => item.transactionTime || item.date || item.transactionDate || item.createdAt;
   const message = (item) => item.originalMessage || item.message || item.description || 'Expense';
-  const account = (item) => item.account?.name || item.accountName || item.account || 'Account not specified';
+  const account = (item) => item.sourceAccount || item.account?.name || item.accountName || item.account || 'Account not specified';
   const percentage = (item) => Number(item.percentage ?? (total ? Number(item.amount || item.total) / total * 100 : 0));
   const categoryName = (item) => item.name || item.category || 'Other';
   const categoryAmount = (item) => item.amount ?? item.total ?? 0;

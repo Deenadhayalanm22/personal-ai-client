@@ -52,5 +52,7 @@ export function getExpenses(filters, beforeId, limit = 20) {
   return request(`/api/web/expenses?${params}`);
 }
 
-export const updateClassification = (id, category, subcategory, version) => request(`/api/web/expenses/${encodeURIComponent(id)}/classification`, { method: 'PATCH', body: JSON.stringify({ category, subcategory, version }) });
+export const getTags = () => request('/api/web/tags');
+export const createTag = (name) => request('/api/web/tags', { method: 'POST', body: JSON.stringify({ name }) });
+export const updateClassification = (id, changes) => request(`/api/web/expenses/${encodeURIComponent(id)}/classification`, { method: 'PATCH', body: JSON.stringify(changes) });
 export const deleteExpense = (id, version) => request(`/api/web/expenses/${encodeURIComponent(id)}?version=${encodeURIComponent(version)}`, { method: 'DELETE' });

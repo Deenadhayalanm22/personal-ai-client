@@ -13,6 +13,8 @@ export default defineConfig({
       input: {
         main: resolve(projectRoot, 'index.html'),
         access: resolve(projectRoot, 'access/index.html'),
+        portal: resolve(projectRoot, 'portal/index.html'),
+        dashboard: resolve(projectRoot, 'dashboard/index.html'),
         privacyPolicy: resolve(projectRoot, 'privacy-policy/index.html'),
       },
     },

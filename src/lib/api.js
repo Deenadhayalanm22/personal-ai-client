@@ -12,11 +12,12 @@ async function parseResponse(response) {
   return text ? { message: text } : null;
 }
 
-async function request(path, options = {}) {
+async function request(path, options = {}, authenticated = true) {
   const response = await fetch(`${API_URL}${path}`, { credentials: 'include', ...options, headers: { ...(options.body ? { 'Content-Type': 'application/json' } : {}), ...options.headers } });
   const data = await parseResponse(response);
   if (!response.ok) {
     const fallback = response.status === 401 ? 'Your session has expired.' : response.status === 409 ? 'This expense changed after you opened it.' : 'Something went wrong. Please try again.';
+    if (response.status === 401 && authenticated) window.dispatchEvent(new CustomEvent('app:unauthorized'));
     throw new ApiError(data?.message || data?.error || fallback, response.status, data);
   }
   return data;
@@ -24,11 +25,21 @@ async function request(path, options = {}) {
 
 export async function exchangeMagicLink(token) {
   if (!token) throw new ApiError('Magic-link token is missing.', 400);
-  try { return await request('/api/web/auth/magic-link', { method: 'POST', body: JSON.stringify({ token }) }); }
-  finally { window.history.replaceState({}, '', window.location.pathname); }
+  return request('/api/web/auth/magic-link', { method: 'POST', body: JSON.stringify({ token }) }, false);
 }
 
-export const getDashboard = (month) => request(`/api/web/dashboard?month=${encodeURIComponent(month)}`);
+export const getSession = () => request('/api/web/auth/session', {}, false);
+export const requestLoginLink = (phoneNumber) => request('/api/web/auth/login-link', { method: 'POST', body: JSON.stringify({ phoneNumber }) }, false);
+export const logout = () => request('/api/web/auth/logout', { method: 'POST' }, false);
+
+export const getDashboardSummary = (month) => request(`/api/web/dashboard/summary?month=${encodeURIComponent(month)}`);
+export const getMonthlyInsights = (month) => request(`/api/web/expenses/monthly?month=${encodeURIComponent(month)}`);
+export const getAccounts = () => request('/api/web/accounts');
+export const getEnrichment = () => request('/api/web/enrichment');
+export const getBudgets = () => request('/api/web/budgets');
+export const enrichAccount = (id, changes) => request(`/api/web/accounts/${encodeURIComponent(id)}/enrichment`, { method: 'PATCH', body: JSON.stringify(changes) });
+export const saveBudget = (category, monthlyLimit) => request('/api/web/budgets', { method: 'PUT', body: JSON.stringify({ category, monthlyLimit }) });
+export const deleteBudget = (id) => request(`/api/web/budgets/${encodeURIComponent(id)}`, { method: 'DELETE' });
 export const getExpenseTaxonomy = () => request('/api/web/expense-taxonomy');
 
 export function getExpenses(filters, beforeId, limit = 20) {

@@ -1,108 +1,32 @@
 <script>
   import { onMount } from 'svelte';
-  import Home from './Home.svelte';
-  import PrivacyPolicy from './PrivacyPolicy.svelte';
-  import { ApiError, exchangeMagicLink, getDashboard, getExpenseTaxonomy } from './lib/api.js';
-
-  const isPrivacyPage = window.location.pathname === '/privacy-policy';
-  let auth = 'checking';
-  let dashboard = 'loading';
-  let data = null;
-  let taxonomy = null;
-  let taxonomyError = '';
-  let error = '';
-  const currentMonth = new Date().toISOString().slice(0, 7);
-  function filtersFromUrl() {
-    const params = new URLSearchParams(window.location.search);
-    const month = /^\d{4}-\d{2}$/.test(params.get('month') || '') ? params.get('month') : currentMonth;
-    const accountId = Number(params.get('accountId'));
-    return {
-      month,
-      ...(Number.isInteger(accountId) && accountId > 0 ? { accountId } : {}),
-      ...(params.get('category') ? { category: params.get('category') } : {}),
-      ...(params.get('subcategory') ? { subcategory: params.get('subcategory') } : {})
-    };
-  }
-  let filters = filtersFromUrl();
-  let selectedMonth = filters.month;
-
-  function writeFilters(nextFilters, replace = false) {
-    const params = new URLSearchParams();
-    params.set('month', nextFilters.month);
-    if (nextFilters.accountId != null) params.set('accountId', String(nextFilters.accountId));
-    if (nextFilters.category) params.set('category', nextFilters.category);
-    if (nextFilters.subcategory) params.set('subcategory', nextFilters.subcategory);
-    window.history[replace ? 'replaceState' : 'pushState']({}, '', `${window.location.pathname}?${params}`);
-  }
-
-  function updateFilters(nextFilters) {
-    const monthChanged = nextFilters.month !== selectedMonth;
-    filters = nextFilters;
-    selectedMonth = nextFilters.month;
-    writeFilters(nextFilters);
-    if (monthChanged) loadDashboard(selectedMonth);
-  }
-
-  async function loadDashboard(month = selectedMonth, { retain = false } = {}) {
-    selectedMonth = month; dashboard = 'loading'; error = '';
-    if (!retain) data = null;
-    try {
-      data = await getDashboard(month);
-      const count = Number(data?.summary?.transactionCount ?? data?.transactionCount ?? data?.recentExpenses?.items?.length ?? 0);
-      dashboard = count === 0 ? 'empty' : 'ready';
-    } catch (cause) {
-      if (cause instanceof ApiError && cause.status === 401) auth = 'expired';
-      else { dashboard = 'error'; error = cause instanceof Error ? cause.message : 'Something went wrong. Please try again.'; }
-    }
-  }
-
+  import Home from './Home.svelte'; import Auth from './Auth.svelte'; import PrivacyPolicy from './PrivacyPolicy.svelte';
+  import { ApiError, exchangeMagicLink, getSession, getDashboardSummary, getMonthlyInsights, getExpenses, getAccounts, getEnrichment, getBudgets, getExpenseTaxonomy } from './lib/api.js';
+  const initialPath = location.pathname.replace(/\/$/, '') || '/'; const isPrivacyPage = initialPath === '/privacy-policy'; const currentMonth = new Date().toISOString().slice(0, 7);
+  const destination = /^\/portal\/(expenses|accounts)\/\d+$/.test(initialPath) ? initialPath : '/dashboard';
+  let view = isPrivacyPage ? 'privacy' : 'checking'; let selectedMonth = monthFromUrl(); let taxonomy = null; let taxonomyError = ''; let sections = freshSections();
+  function monthFromUrl() { const value = new URLSearchParams(location.search).get('month'); return /^\d{4}-\d{2}$/.test(value || '') ? value : currentMonth; }
+  function state() { return { status: 'loading', data: null, error: '' }; }
+  function freshSections() { return { summary: state(), expenses: state(), insights: state(), accounts: state(), enrichment: state(), budgets: state() }; }
+  function setSection(name, patch) { sections = { ...sections, [name]: { ...sections[name], ...patch } }; }
+  function unauthorized() { location.replace(`/portal?next=${encodeURIComponent(location.pathname + location.search)}`); }
+  async function load(name, request) { setSection(name, { status: sections[name].data ? 'refreshing' : 'loading', error: '' }); try { const data = await request(); setSection(name, { status: 'ready', data, error: '' }); return data; } catch (cause) { if (!(cause instanceof ApiError && cause.status === 401)) setSection(name, { status: 'error', error: cause?.message || 'Something went wrong. Please try again.' }); } }
+  const loadSummary = () => load('summary', () => getDashboardSummary(selectedMonth)); const loadExpenses = () => load('expenses', () => getExpenses({ month: selectedMonth }, null, 10)); const loadInsights = () => load('insights', () => getMonthlyInsights(selectedMonth));
+  const loadAccounts = () => load('accounts', getAccounts); const loadEnrichment = () => load('enrichment', getEnrichment); const loadBudgets = () => load('budgets', getBudgets);
+  async function loadApp() { view = 'dashboard'; getExpenseTaxonomy().then(value => taxonomy = value).catch(cause => { if (!(cause instanceof ApiError && cause.status === 401)) taxonomyError = 'Unable to load categories.'; }); await loadSummary(); Promise.allSettled([loadExpenses(), loadInsights(), loadAccounts(), loadEnrichment(), loadBudgets()]); }
+  function changeMonth(month, updateHistory = true) { selectedMonth = month; if (updateHistory) history.pushState({}, '', `/dashboard?month=${month}`); loadSummary(); loadExpenses(); loadInsights(); }
   async function initialize() {
-    const token = new URLSearchParams(window.location.search).get('token');
-    try {
-      if (token) await exchangeMagicLink(token);
-      auth = 'authenticated';
-    } catch (cause) {
-      auth = 'expired';
-      return;
-    }
-
-    const taxonomyRequest = getExpenseTaxonomy()
-      .then((value) => { taxonomy = value; })
-      .catch((cause) => {
-        if (cause instanceof ApiError && cause.status === 401) auth = 'expired';
-        else taxonomyError = cause instanceof Error ? cause.message : 'Unable to load categories.';
-      });
-    await Promise.all([loadDashboard(selectedMonth), taxonomyRequest]);
-  }
-
-  onMount(() => {
     if (isPrivacyPage) return;
-    const onPopState = () => {
-      const nextFilters = filtersFromUrl();
-      const monthChanged = nextFilters.month !== selectedMonth;
-      filters = nextFilters;
-      selectedMonth = nextFilters.month;
-      if (monthChanged) loadDashboard(selectedMonth);
-    };
-    window.addEventListener('popstate', onPopState);
-    initialize();
-    return () => window.removeEventListener('popstate', onPopState);
-  });
+    if (initialPath === '/access') { const token = new URLSearchParams(location.search).get('token'); if (!token) { view = 'invalid-link'; return; } view = 'magic-loading'; try { await exchangeMagicLink(token); const next = sessionStorage.getItem('portal-next') || '/dashboard'; sessionStorage.removeItem('portal-next'); location.replace(next); } catch (cause) { view = cause instanceof ApiError && cause.status === 401 ? 'invalid-link' : (!navigator.onLine ? 'magic-offline' : 'magic-error'); } return; }
+    if (initialPath === '/portal') { const next = new URLSearchParams(location.search).get('next'); if (next?.startsWith('/')) sessionStorage.setItem('portal-next', next); try { await getSession(); location.replace(next?.startsWith('/') ? next : '/dashboard'); } catch (cause) { view = cause instanceof ApiError && cause.status === 401 ? 'login' : 'session-error'; } return; }
+    try { await getSession(); await loadApp(); } catch (cause) { cause instanceof ApiError && cause.status === 401 ? unauthorized() : view = 'session-error'; }
+  }
+  onMount(() => { const auth = () => unauthorized(); const pop = () => { const month = monthFromUrl(); if (month !== selectedMonth) changeMonth(month, false); }; addEventListener('app:unauthorized', auth); addEventListener('popstate', pop); initialize(); return () => { removeEventListener('app:unauthorized', auth); removeEventListener('popstate', pop); }; });
 </script>
-
-{#if isPrivacyPage}
-  <PrivacyPolicy />
-{:else if auth === 'checking'}
-  <main class="center-page" aria-live="polite">
-    <span class="brand-orb" aria-hidden="true">₹</span><span class="spinner" aria-hidden="true"></span>
-    <h1>Opening your dashboard…</h1><p>Securing your private expense overview.</p>
-  </main>
-{:else if auth === 'expired'}
-  <main class="center-page expired" role="alert">
-    <span class="brand-orb" aria-hidden="true">↗</span><p class="eyebrow">Access link</p>
-    <h1>This link has expired or was already used.</h1>
-    <p>Send <strong>“show my link”</strong> on WhatsApp to receive a new one.</p>
-  </main>
-{:else}
-  <Home {data} {dashboard} {error} {taxonomy} {taxonomyError} {selectedMonth} {filters} onFiltersChange={updateFilters} onRefresh={() => loadDashboard(selectedMonth, { retain: true })} onExpired={() => auth = 'expired'} />
-{/if}
+{#if view === 'privacy'}<PrivacyPolicy />
+{:else if view === 'login'}<Auth />
+{:else if view === 'dashboard'}<Home {sections} {taxonomy} {taxonomyError} {selectedMonth} {destination} onMonthChange={changeMonth} refreshSummary={loadSummary} refreshExpenses={loadExpenses} refreshAccounts={loadAccounts} refreshEnrichment={loadEnrichment} refreshBudgets={loadBudgets} onExpired={unauthorized} onLogout={() => location.replace('/portal?message=' + encodeURIComponent('You’ve been signed out.'))} />
+{:else if view === 'invalid-link'}<main class="center-page expired" role="alert"><span class="brand-orb">!</span><h1>This sign-in link is invalid, expired, or has already been used.</h1><a class="center-action" href="/portal">Request a new link</a></main>
+{:else if view === 'magic-offline' || view === 'magic-error'}<main class="center-page expired" role="alert"><span class="brand-orb">↻</span><h1>{view === 'magic-offline' ? 'You appear to be offline.' : 'We couldn’t sign you in right now.'}</h1><button class="center-action" on:click={initialize}>Try again</button></main>
+{:else if view === 'session-error'}<main class="center-page expired" role="alert"><span class="brand-orb">↻</span><h1>We couldn’t connect to your portal.</h1><button class="center-action" on:click={initialize}>Try again</button></main>
+{:else}<main class="center-page" aria-live="polite"><span class="brand-orb">₹</span><span class="spinner"></span><h1>{view === 'magic-loading' ? 'Signing you in securely…' : 'Checking your secure session…'}</h1></main>{/if}

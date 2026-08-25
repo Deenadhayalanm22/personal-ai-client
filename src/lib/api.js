@@ -37,6 +37,9 @@ export const getMonthlyInsights = (month) => request(`/api/web/expenses/monthly?
 export const getAccounts = () => request('/api/web/accounts');
 export const getEnrichment = () => request('/api/web/enrichment');
 export const discardEnrichmentTransaction = (id, version) => request(`/api/web/enrichment/transactions/${encodeURIComponent(id)}?version=${encodeURIComponent(version)}`, { method: 'DELETE' });
+export const updateEnrichmentDraft = (id, changes) => request(`/api/web/enrichment/drafts/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(changes) });
+export const confirmEnrichmentDraft = (id, version) => request(`/api/web/enrichment/drafts/${encodeURIComponent(id)}/confirm`, { method: 'POST', body: JSON.stringify({ version }) });
+export const discardEnrichmentDraft = (id, version) => request(`/api/web/enrichment/drafts/${encodeURIComponent(id)}?version=${encodeURIComponent(version)}`, { method: 'DELETE' });
 export const getBudgets = () => request('/api/web/budgets');
 export const enrichAccount = (id, changes) => request(`/api/web/accounts/${encodeURIComponent(id)}/enrichment`, { method: 'PATCH', body: JSON.stringify(changes) });
 export const saveBudget = (category, monthlyLimit) => request('/api/web/budgets', { method: 'PUT', body: JSON.stringify({ category, monthlyLimit }) });

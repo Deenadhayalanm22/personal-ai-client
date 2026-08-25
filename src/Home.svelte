@@ -27,14 +27,19 @@
   function setFilter(patch) { onFiltersChange({ ...filters, ...patch }); } function clearFilters() { onFiltersChange({ month: selectedMonth }); }
   function toggleFilterTag(id) { const current = filters.tagIds || []; const tagIds = current.includes(id) ? current.filter(value => value !== id) : [...current, id]; setFilter(tagIds.length ? { tagIds, tagMatch: filters.tagMatch === 'all' ? 'all' : 'any' } : { tagIds: undefined, tagMatch: undefined }); }
   function reviewEnrichment(item) {
-    history.pushState({}, '', item.portalPath);
-    if (item.type === 'ACCOUNT') {
-      const match = accounts.find(account => account.id === item.id);
-      if (match) openAccount(match); else { history.replaceState({}, '', dashboardUrl()); formError = 'This account is no longer available. Refresh the accounts section and try again.'; }
+    formError = '';
+    const pathId = String(item.portalPath || '').match(/\/(\d+)\/?$/)?.[1];
+    const targetId = item.id ?? item.entityId ?? item.targetId ?? item.expenseId ?? item.accountId ?? pathId;
+    const sameId = candidate => String(candidate?.id) === String(targetId);
+    if (String(item.type || '').toUpperCase() === 'ACCOUNT') {
+      const match = accounts.find(sameId);
+      if (match) { history.pushState({}, '', item.portalPath || `/portal/accounts/${match.id}`); openAccount(match); }
+      else formError = 'This account is no longer available. Refresh the accounts section and try again.';
       return;
     }
-    const match = items.find(expense => expense.id === item.id);
-    if (match) openEdit(match); else { history.replaceState({}, '', dashboardUrl()); formError = 'This transaction is not in the current expense page. Complete transaction enrichment is not supported by the current API yet.'; }
+    const match = items.find(sameId);
+    if (match) { history.pushState({}, '', item.portalPath || `/portal/expenses/${match.id}`); openEdit(match); }
+    else formError = targetId == null ? 'This pending item does not include a transaction reference.' : 'This transaction is not in the current expense page. Clear filters or load more transactions, then try again.';
   }
   function closeExpenseEditor() { editing = null; history.replaceState({}, '', dashboardUrl()); }
   function closeAccountEditor() { accountEditing = null; history.replaceState({}, '', dashboardUrl()); }

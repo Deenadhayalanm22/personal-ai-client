@@ -48,6 +48,10 @@ export function getExpenses(filters, beforeId, limit = 20) {
   if (normalizedFilters.accountId != null) params.set('accountId', String(normalizedFilters.accountId));
   if (normalizedFilters.category) params.set('category', normalizedFilters.category);
   if (normalizedFilters.subcategory) params.set('subcategory', normalizedFilters.subcategory);
+  if (normalizedFilters.tagIds?.length) {
+    params.set('tagIds', [...new Set(normalizedFilters.tagIds)].join(','));
+    params.set('tagMatch', normalizedFilters.tagMatch === 'all' ? 'all' : 'any');
+  }
   if (beforeId !== null && beforeId !== undefined) params.set('beforeId', String(beforeId));
   return request(`/api/web/expenses?${params}`);
 }

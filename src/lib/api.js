@@ -34,22 +34,11 @@ export const logout = () => request('/api/web/auth/logout', { method: 'POST' }, 
 
 export const getDashboardSummary = (month) => request(`/api/web/dashboard/summary?month=${encodeURIComponent(month)}`);
 export const getMonthlyInsights = (month) => request(`/api/web/expenses/monthly?month=${encodeURIComponent(month)}`);
-export const getAccounts = () => request('/api/web/accounts');
-export const getEnrichment = () => request('/api/web/enrichment');
-export const discardEnrichmentTransaction = (id, version) => request(`/api/web/enrichment/transactions/${encodeURIComponent(id)}?version=${encodeURIComponent(version)}`, { method: 'DELETE' });
-export const updateEnrichmentDraft = (id, changes) => request(`/api/web/enrichment/drafts/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(changes) });
-export const confirmEnrichmentDraft = (id, version) => request(`/api/web/enrichment/drafts/${encodeURIComponent(id)}/confirm`, { method: 'POST', body: JSON.stringify({ version }) });
-export const discardEnrichmentDraft = (id, version) => request(`/api/web/enrichment/drafts/${encodeURIComponent(id)}?version=${encodeURIComponent(version)}`, { method: 'DELETE' });
-export const getBudgets = () => request('/api/web/budgets');
-export const enrichAccount = (id, changes) => request(`/api/web/accounts/${encodeURIComponent(id)}/enrichment`, { method: 'PATCH', body: JSON.stringify(changes) });
-export const saveBudget = (category, monthlyLimit) => request('/api/web/budgets', { method: 'PUT', body: JSON.stringify({ category, monthlyLimit }) });
-export const deleteBudget = (id) => request(`/api/web/budgets/${encodeURIComponent(id)}`, { method: 'DELETE' });
 export const getExpenseTaxonomy = () => request('/api/web/expense-taxonomy');
 
 export function getExpenses(filters, beforeId, limit = 20) {
   const normalizedFilters = typeof filters === 'string' ? { month: filters } : filters;
   const params = new URLSearchParams({ month: normalizedFilters.month, limit: String(limit) });
-  if (normalizedFilters.accountId != null) params.set('accountId', String(normalizedFilters.accountId));
   if (normalizedFilters.category) params.set('category', normalizedFilters.category);
   if (normalizedFilters.subcategory) params.set('subcategory', normalizedFilters.subcategory);
   if (normalizedFilters.tagIds?.length) {
@@ -62,5 +51,10 @@ export function getExpenses(filters, beforeId, limit = 20) {
 
 export const getTags = () => request('/api/web/tags');
 export const createTag = (name) => request('/api/web/tags', { method: 'POST', body: JSON.stringify({ name }) });
-export const updateClassification = (id, changes) => request(`/api/web/expenses/${encodeURIComponent(id)}/classification`, { method: 'PATCH', body: JSON.stringify(changes) });
+export const updateClassification = (id, changes) => {
+  const body = { version: changes.version, tagIds: changes.tagIds || [] };
+  if (changes.category !== undefined) body.category = changes.category;
+  if (changes.subcategory !== undefined) body.subcategory = changes.subcategory;
+  return request(`/api/web/expenses/${encodeURIComponent(id)}/classification`, { method: 'PATCH', body: JSON.stringify(body) });
+};
 export const deleteExpense = (id, version) => request(`/api/web/expenses/${encodeURIComponent(id)}?version=${encodeURIComponent(version)}`, { method: 'DELETE' });

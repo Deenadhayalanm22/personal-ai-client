@@ -36,3 +36,7 @@ export const getExpenseCalendar = (month) => request(`/api/web/expenses/calendar
 export const getRecentExpenses = (month, limit = 10) => request(`/api/web/expenses?month=${encodeURIComponent(month)}&limit=${encodeURIComponent(limit)}`);
 export const getMoneyStories = (month) => request(`/api/web/expenses/monthly?month=${encodeURIComponent(month)}`);
 export const createMissingDateContext = (date, timezone) => request('/api/web/expenses/calendar/context', { method: 'POST', body: JSON.stringify({ type: 'MISSING_TRANSACTION_DATE', date, timezone }) });
+export const getExpensesForDate = (month, date, limit = 50) => request(`/api/web/expenses?month=${encodeURIComponent(month)}&date=${encodeURIComponent(date)}&limit=${encodeURIComponent(limit)}`);
+export const updateClassification = (id, changes) => request(`/api/web/expenses/${encodeURIComponent(id)}/classification`, { method: 'PATCH', body: JSON.stringify(changes) });
+export const deleteExpense = (id, version) => request(`/api/web/expenses/${encodeURIComponent(id)}?version=${encodeURIComponent(version)}`, { method: 'DELETE' });
+export const createExpenseWhatsAppContext = (id, version) => request(`/api/web/expenses/${encodeURIComponent(id)}/whatsapp-context`, { method: 'POST', body: JSON.stringify({ type: 'EDIT_TRANSACTION', version }) });

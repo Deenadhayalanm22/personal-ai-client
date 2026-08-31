@@ -1,15 +1,17 @@
 <script>
   import { onMount } from 'svelte';
   import Home from './Home.svelte'; import Auth from './Auth.svelte'; import PrivacyPolicy from './PrivacyPolicy.svelte';
-  import { ApiError, exchangeMagicLink, getSession, getExpenseCalendar } from './lib/api.js';
+  import { ApiError, exchangeMagicLink, getSession, getExpenseCalendar, getRecentExpenses, getMoneyStories } from './lib/api.js';
   const initialPath = location.pathname.replace(/\/$/, '') || '/', isPrivacyPage = initialPath === '/privacy-policy', currentMonth = new Date().toISOString().slice(0, 7);
-  let view = isPrivacyPage ? 'privacy' : 'checking', selectedMonth = monthFromUrl(), calendarSection = state();
+  let view = isPrivacyPage ? 'privacy' : 'checking', selectedMonth = monthFromUrl(), calendarSection = state(), recentSection = state(), storiesSection = state();
   function state() { return { status: 'loading', data: null, error: '' }; }
   function monthFromUrl() { const value = new URLSearchParams(location.search).get('month'); return /^\d{4}-\d{2}$/.test(value || '') ? value : currentMonth; }
   function unauthorized() { location.replace(`/portal?next=${encodeURIComponent(location.pathname + location.search)}`); }
   async function loadCalendar() { calendarSection = { ...calendarSection, status: calendarSection.data ? 'refreshing' : 'loading', error: '' }; try { calendarSection = { status: 'ready', data: await getExpenseCalendar(selectedMonth), error: '' }; } catch (cause) { if (!(cause instanceof ApiError && cause.status === 401)) calendarSection = { ...calendarSection, status: 'error', error: cause?.message || 'Something went wrong. Please try again.' }; } }
-  async function loadApp() { view = 'dashboard'; await loadCalendar(); }
-  function changeMonth(month, updateHistory = true) { selectedMonth = month; if (updateHistory) history.pushState({}, '', `/dashboard?month=${encodeURIComponent(month)}`); loadCalendar(); }
+  async function loadRecent() { recentSection = { ...recentSection, status: recentSection.data ? 'refreshing' : 'loading', error: '' }; try { recentSection = { status: 'ready', data: await getRecentExpenses(selectedMonth, 10), error: '' }; } catch (cause) { if (!(cause instanceof ApiError && cause.status === 401)) recentSection = { ...recentSection, status: 'error', error: cause?.message || 'Could not load recent transactions.' }; } }
+  async function loadStories() { storiesSection = { ...storiesSection, status: storiesSection.data ? 'refreshing' : 'loading', error: '' }; try { storiesSection = { status: 'ready', data: await getMoneyStories(selectedMonth), error: '' }; } catch (cause) { if (!(cause instanceof ApiError && cause.status === 401)) storiesSection = { ...storiesSection, status: 'error', error: cause?.message || 'Could not load Money Stories.' }; } }
+  async function loadApp() { view = 'dashboard'; await Promise.allSettled([loadCalendar(), loadRecent(), loadStories()]); }
+  function changeMonth(month, updateHistory = true) { selectedMonth = month; if (updateHistory) history.pushState({}, '', `/dashboard?month=${encodeURIComponent(month)}`); loadCalendar(); loadRecent(); loadStories(); }
   async function initialize() {
     if (isPrivacyPage) return;
     if (initialPath === '/access') { const token = new URLSearchParams(location.search).get('token'); if (!token) { view = 'invalid-link'; return; } view = 'magic-loading'; try { await exchangeMagicLink(token); const next = sessionStorage.getItem('portal-next') || '/dashboard'; sessionStorage.removeItem('portal-next'); location.replace(next); } catch (cause) { view = cause instanceof ApiError && cause.status === 401 ? 'invalid-link' : (!navigator.onLine ? 'magic-offline' : 'magic-error'); } return; }
@@ -20,7 +22,7 @@
 </script>
 {#if view === 'privacy'}<PrivacyPolicy />
 {:else if view === 'login'}<Auth />
-{:else if view === 'dashboard'}<Home {calendarSection} {selectedMonth} onMonthChange={changeMonth} refreshCalendar={loadCalendar} onLogout={() => location.replace('/portal?message=' + encodeURIComponent('You’ve been signed out.'))} />
+{:else if view === 'dashboard'}<Home {calendarSection} {recentSection} {storiesSection} {selectedMonth} onMonthChange={changeMonth} refreshCalendar={loadCalendar} refreshRecent={loadRecent} refreshStories={loadStories} onLogout={() => location.replace('/portal?message=' + encodeURIComponent('You’ve been signed out.'))} />
 {:else if view === 'invalid-link'}<main class="center-page expired" role="alert"><span class="brand-orb">!</span><h1>This sign-in link is invalid, expired, or has already been used.</h1><a class="center-action" href="/portal">Request a new link</a></main>
 {:else if view === 'magic-offline' || view === 'magic-error'}<main class="center-page expired" role="alert"><span class="brand-orb">↻</span><h1>{view === 'magic-offline' ? 'You appear to be offline.' : 'We couldn’t sign you in right now.'}</h1><button class="center-action" on:click={initialize}>Try again</button></main>
 {:else if view === 'session-error'}<main class="center-page expired" role="alert"><span class="brand-orb">↻</span><h1>We couldn’t connect to your portal.</h1><button class="center-action" on:click={initialize}>Try again</button></main>

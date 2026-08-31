@@ -33,3 +33,5 @@ export const requestLoginLink = (phoneNumber) => request('/api/web/auth/login-li
 export const logout = () => request('/api/web/auth/logout', { method: 'POST' }, false);
 
 export const getExpenseCalendar = (month) => request(`/api/web/expenses/calendar?month=${encodeURIComponent(month)}`);
+export const getRecentExpenses = (month, limit = 10) => request(`/api/web/expenses?month=${encodeURIComponent(month)}&limit=${encodeURIComponent(limit)}`);
+export const getMoneyStories = (month) => request(`/api/web/expenses/monthly?month=${encodeURIComponent(month)}`);

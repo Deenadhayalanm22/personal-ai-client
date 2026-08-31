@@ -32,29 +32,4 @@ export const getSession = () => request('/api/web/auth/session', {}, false);
 export const requestLoginLink = (phoneNumber) => request('/api/web/auth/login-link', { method: 'POST', body: JSON.stringify({ phoneNumber }) }, false);
 export const logout = () => request('/api/web/auth/logout', { method: 'POST' }, false);
 
-export const getDashboardSummary = (month) => request(`/api/web/dashboard/summary?month=${encodeURIComponent(month)}`);
-export const getMonthlyInsights = (month) => request(`/api/web/expenses/monthly?month=${encodeURIComponent(month)}`);
-export const getExpenseTaxonomy = () => request('/api/web/expense-taxonomy');
-
-export function getExpenses(filters, beforeId, limit = 20) {
-  const normalizedFilters = typeof filters === 'string' ? { month: filters } : filters;
-  const params = new URLSearchParams({ month: normalizedFilters.month, limit: String(limit) });
-  if (normalizedFilters.category) params.set('category', normalizedFilters.category);
-  if (normalizedFilters.subcategory) params.set('subcategory', normalizedFilters.subcategory);
-  if (normalizedFilters.tagIds?.length) {
-    params.set('tagIds', [...new Set(normalizedFilters.tagIds)].join(','));
-    params.set('tagMatch', normalizedFilters.tagMatch === 'all' ? 'all' : 'any');
-  }
-  if (beforeId !== null && beforeId !== undefined) params.set('beforeId', String(beforeId));
-  return request(`/api/web/expenses?${params}`);
-}
-
-export const getTags = () => request('/api/web/tags');
-export const createTag = (name) => request('/api/web/tags', { method: 'POST', body: JSON.stringify({ name }) });
-export const updateClassification = (id, changes) => {
-  const body = { version: changes.version, tagIds: changes.tagIds || [] };
-  if (changes.category !== undefined) body.category = changes.category;
-  if (changes.subcategory !== undefined) body.subcategory = changes.subcategory;
-  return request(`/api/web/expenses/${encodeURIComponent(id)}/classification`, { method: 'PATCH', body: JSON.stringify(body) });
-};
-export const deleteExpense = (id, version) => request(`/api/web/expenses/${encodeURIComponent(id)}?version=${encodeURIComponent(version)}`, { method: 'DELETE' });
+export const getExpenseCalendar = (month) => request(`/api/web/expenses/calendar?month=${encodeURIComponent(month)}`);

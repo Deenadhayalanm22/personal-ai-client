@@ -24,3 +24,4 @@
 /* Keep the disclosure control optically centered with the transaction amount. */
 .row-value .row-chevron{display:grid;place-items:center;width:18px;height:18px;line-height:18px;transform:translateY(-2px)}
 .row-value .row-chevron.open{transform:translateY(-2px) rotate(180deg)}
+.edit-whatsapp-note{margin:17px 0 0;padding:12px;border-radius:10px;background:var(--wash);color:var(--muted);font-size:11px;line-height:1.55}

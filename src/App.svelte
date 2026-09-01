@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import Home from './Home.svelte'; import Auth from './Auth.svelte'; import PrivacyPolicy from './PrivacyPolicy.svelte';
   import { ApiError, exchangeMagicLink, getSession, getExpenseCalendar, getRecentExpenses, getMoneyStories } from './lib/api.js';
-  const initialPath = location.pathname.replace(/\/$/, '') || '/', isPrivacyPage = initialPath === '/privacy-policy', currentMonth = new Date().toISOString().slice(0, 7);
+  const initialPath = location.pathname.replace(/\/$/, '') || '/', isPrivacyPage = initialPath === '/privacy-policy', now = new Date(), currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   let view = isPrivacyPage ? 'privacy' : 'checking', selectedMonth = monthFromUrl(), calendarSection = state(), recentSection = state(), storiesSection = state();
   function state() { return { status: 'loading', data: null, error: '' }; }
   function monthFromUrl() { const value = new URLSearchParams(location.search).get('month'); return /^\d{4}-\d{2}$/.test(value || '') ? value : currentMonth; }

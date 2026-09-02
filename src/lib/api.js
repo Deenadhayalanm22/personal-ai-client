@@ -39,4 +39,4 @@ export const createMissingDateContext = (date, timezone) => request('/api/web/ex
 export const getExpensesForDate = (month, date, limit = 50) => request(`/api/web/expenses?month=${encodeURIComponent(month)}&date=${encodeURIComponent(date)}&limit=${encodeURIComponent(limit)}`);
 export const updateExpense = (id, changes) => request(`/api/web/expenses/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(changes) });
 export const deleteExpense = (id) => request(`/api/web/expenses/${encodeURIComponent(id)}`, { method: 'DELETE' });
-export const createExpenseWhatsAppContext = (id, version) => request(`/api/web/expenses/${encodeURIComponent(id)}/whatsapp-context`, { method: 'POST', body: JSON.stringify({ type: 'EDIT_TRANSACTION', version }) });
+export const createExpenseWhatsAppContext = (id) => request(`/api/web/expenses/${encodeURIComponent(id)}/whatsapp-context`, { method: 'POST', body: JSON.stringify({ type: 'EDIT_TRANSACTION' }) });

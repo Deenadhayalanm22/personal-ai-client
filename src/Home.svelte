@@ -1,9 +1,10 @@
 <script>
   import { ApiError, createMissingDateContext, deleteExpense, getExpenseOptions, getExpensesForDate, logout, updateExpense } from './lib/api.js';
   import SectionState from './SectionState.svelte';
+  import Normalization from './Normalization.svelte';
   export let calendarSection; export let recentSection; export let storiesSection; export let selectedMonth; export let onMonthChange; export let refreshCalendar; export let refreshRecent; export let refreshStories; export let onLogout;
 
-  let selectedDay = null, activityTab = 'recent', dayItems = [], dayStatus = 'idle', dayError = '', showAll = false, expandedId = null;
+  let activeView = 'calendar', selectedDay = null, activityTab = 'recent', dayItems = [], dayStatus = 'idle', dayError = '', showAll = false, expandedId = null;
   let openedStory = null, handoff = null, addingContext = false, actionError = '', loggingOut = false, signOutError = '';
   let editing = null, editAmount = '', editDate = '', editCategory = '', editSubcategory = '', editMerchantId = '', saving = false, deleting = null;
   let editOptions = { categories: [], merchants: [] }, optionsStatus = 'idle', optionsError = '';
@@ -42,6 +43,10 @@
 </script>
 
 <header class="portal-topbar"><a class="wordmark" href="/dashboard"><span>₹</span>Money Stories</a><label class="month-switcher"><button type="button" aria-label="Previous month" on:click={()=>changeMonth(-1)}>←</button><input aria-label="Select month" type="month" value={selectedMonth} max={currentLocalMonth()} on:change={e=>{selectedDay=null;dayItems=[];activityTab='recent';onMonthChange(e.currentTarget.value)}}/><button type="button" aria-label="Next month" on:click={()=>changeMonth(1)}>→</button></label></header>
+<nav class="primary-view-nav" aria-label="Main sections"><button class:active={activeView==='calendar'} on:click={()=>activeView='calendar'}><span>▦</span> Calendar</button><button class:active={activeView==='normalization'} on:click={()=>activeView='normalization'}><span>≋</span> Normalization</button></nav>
+{#if activeView === 'normalization'}
+<main class="story-shell"><Normalization /></main>
+{:else}
 <main class="story-shell">
 {#if openedStory}<section class="story-detail"><button class="back-button" on:click={()=>openedStory=null}>← Back to stories</button><p class="micro-label">{openedStory.type||'MONEY STORY'} · {monthLabel(selectedMonth)}</p><h1>{openedStory.headline}</h1><p class="detail-copy">{openedStory.explanation}</p><div class="evidence-list">{#each openedStory.evidence||[] as item}<div class="evidence-row"><div><strong>{merchant(item)}</strong><span>{category(item)} · {dateLabel(transactionDate(item))}</span></div><b>− {money(item.amount)}</b></div>{/each}</div></section>
 {:else}
@@ -57,6 +62,7 @@
 
 <SectionState section={storiesSection} title="Money Stories" retry={refreshStories}><section class="stories-section"><div class="section-title"><div><p class="micro-label">YOUR MONEY STORIES</p><h2>{stories.length?'Something changed':'Your financial story is forming'}</h2></div></div>{#each stories as story,index}<button class:new-story={index===0} class="story-card" on:click={()=>openedStory=story}><span class="story-badge">{story.type||'Story'}</span><div><h3>{story.headline}</h3><span>↗</span></div><p>{story.summary}</p><small>Tap to see the evidence →</small></button>{:else}<div class="empty-state story-empty"><span>✦</span><h2>No stories for this month yet.</h2><p>Stories appear when there is enough trustworthy evidence.</p></div>{/each}</section></SectionState>
 {/if}</main>
+{/if}
 
 {#if editing}<div class="modal-backdrop"><div class="modal" role="dialog" aria-modal="true"><button class="close" on:click={()=>editing=null}>×</button><p class="micro-label">QUICK EDIT</p><h2>{merchant(editing)}</h2><label>Amount<input type="number" inputmode="decimal" min="0.01" step="0.01" bind:value={editAmount}/></label><label>Transaction date<input type="date" max={new Date().toISOString().slice(0,10)} bind:value={editDate}/></label>{#if optionsStatus==='loading'}<p class="edit-options-status">Loading categories and merchants…</p>{:else if optionsStatus==='error'}<p class="form-error" role="alert">{optionsError}</p>{:else}<label>Category<select value={editCategory} on:change={changeEditCategory}><option value="" disabled>Select a category</option>{#each editOptions.categories as option}<option value={option.name}>{option.name}</option>{/each}</select></label><label>Subcategory<select bind:value={editSubcategory} disabled={!editCategory}><option value="" disabled>Select a subcategory</option>{#each editSubcategories as option}<option value={option}>{option}</option>{/each}</select></label><label>Merchant<select bind:value={editMerchantId}><option value="" disabled>Select a merchant</option>{#each editOptions.merchants as option}<option value={String(option.id)}>{option.name}</option>{/each}</select></label>{/if}{#if actionError}<p class="form-error" role="alert">{actionError}</p>{/if}<div class="modal-actions"><button class="secondary" on:click={()=>editing=null}>Cancel</button><button class="primary" on:click={saveEdit} disabled={saving||optionsStatus!=='ready'||!editDate||Number(editAmount)<=0||!editCategory||!editSubcategory||!editMerchantId}>{saving?'Saving…':'Save changes'}</button></div></div></div>{/if}
 {#if deleting}<div class="modal-backdrop"><div class="modal" role="alertdialog" aria-modal="true"><p class="micro-label">DELETE TRANSACTION</p><h2>Delete {merchant(deleting)}?</h2><p>This will update the calendar and monthly totals.</p><div class="modal-actions"><button class="secondary" on:click={()=>deleting=null}>Cancel</button><button class="primary delete-confirm" on:click={confirmDelete}>Delete</button></div></div></div>{/if}

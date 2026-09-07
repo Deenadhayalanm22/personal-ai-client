@@ -40,3 +40,7 @@ export const createMissingDateContext = (date, timezone) => request('/api/web/ex
 export const getExpensesForDate = (month, date, limit = 50) => request(`/api/web/expenses?month=${encodeURIComponent(month)}&date=${encodeURIComponent(date)}&limit=${encodeURIComponent(limit)}`);
 export const updateExpense = (id, changes) => request(`/api/web/expenses/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(changes) });
 export const deleteExpense = (id) => request(`/api/web/expenses/${encodeURIComponent(id)}`, { method: 'DELETE' });
+
+export const getNormalizationEntries = () => request('/api/web/normalization');
+export const createNormalizationEntry = (entry) => request('/api/web/normalization', { method: 'POST', body: JSON.stringify(entry) });
+export const updateNormalizationEntry = (type, id, changes) => request(`/api/web/normalization/${encodeURIComponent(type)}/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(changes) });

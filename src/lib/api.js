@@ -41,6 +41,17 @@ export const getExpensesForDate = (month, date, limit = 50) => request(`/api/web
 export const updateExpense = (id, changes) => request(`/api/web/expenses/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(changes) });
 export const deleteExpense = (id) => request(`/api/web/expenses/${encodeURIComponent(id)}`, { method: 'DELETE' });
 
-export const getNormalizationEntries = () => request('/api/web/normalization');
-export const createNormalizationEntry = (entry) => request('/api/web/normalization', { method: 'POST', body: JSON.stringify(entry) });
-export const updateNormalizationEntry = (type, id, changes) => request(`/api/web/normalization/${encodeURIComponent(type)}/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(changes) });
+let referenceEntityTypesCache = null;
+let referenceEntityTypesRequest = null;
+
+export async function getReferenceEntityTypes() {
+  if (referenceEntityTypesCache) return referenceEntityTypesCache;
+  if (!referenceEntityTypesRequest) {
+    referenceEntityTypesRequest = request('/api/web/reference-entity-types')
+      .then(data => { referenceEntityTypesCache = data; return data; })
+      .catch(cause => { referenceEntityTypesRequest = null; throw cause; });
+  }
+  return referenceEntityTypesRequest;
+}
+
+export const createReferencePreference = (preference) => request('/api/web/reference-preferences', { method: 'POST', body: JSON.stringify(preference) });

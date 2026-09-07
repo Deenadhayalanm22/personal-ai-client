@@ -1,94 +1,84 @@
 <script>
-  import { createNormalizationEntry, getNormalizationEntries, updateNormalizationEntry } from './lib/api.js';
+  import { createReferencePreference, getReferenceEntityTypes } from './lib/api.js';
 
-  let status = 'loading', error = '', items = [];
-  let expanded = null, editing = null, mode = 'create', showModal = false, saving = false, formError = '';
-  let selectedType = 'merchant', primaryName = '', aliasesText = '', accountType = '';
+  let status = 'loading', error = '', entityTypes = [], savedPreferences = [];
+  let expanded = null, showModal = false, saving = false, formError = '';
+  let entityType = '', primaryReference = '', alias = '';
 
-  function normalise(data) {
-    const merchants = (data?.merchants || []).map(item => ({ ...item, entityType: 'merchant', aliases: item.aliases || item.userAliases || item.preferredAliases || [] }));
-    const accounts = (data?.accounts || []).map(item => ({ ...item, entityType: 'account', aliases: item.aliases || item.userAliases || item.preferredAliases || [] }));
-    return [...merchants, ...accounts].sort((a, b) => (a.name || a.primaryName || '').localeCompare(b.name || b.primaryName || ''));
-  }
+  const labels = { MERCHANT: 'Merchant', BENEFICIARY: 'Beneficiary', ACCOUNT: 'Account' };
+  const icons = { MERCHANT: 'M', BENEFICIARY: 'B', ACCOUNT: '₹' };
+  const typeLabel = type => labels[type] || type.replaceAll('_', ' ').toLowerCase().replace(/^./, value => value.toUpperCase());
+  const aliasesFor = item => (item.aliases || []).map(value => typeof value === 'string' ? value : value.alias).filter(Boolean);
 
-  async function load() {
+  async function loadEntityTypes() {
     status = 'loading'; error = '';
-    try { items = normalise(await getNormalizationEntries()); status = 'ready'; }
-    catch (cause) { status = 'error'; error = cause?.message || 'Could not load normalization details.'; }
+    try {
+      const data = await getReferenceEntityTypes();
+      entityTypes = data?.entityTypes || [];
+      entityType = entityType || entityTypes[0] || '';
+      status = 'ready';
+    } catch (cause) { status = 'error'; error = cause?.message || 'Could not load reference types.'; }
   }
 
-  const entryKey = item => `${item.entityType}-${item.id}`;
-  function openCreate() { mode = 'create'; editing = null; selectedType = 'merchant'; primaryName = ''; aliasesText = ''; accountType = ''; formError = ''; showModal = true; }
-  function openEdit(item) { mode = 'edit'; editing = item; selectedType = item.entityType; primaryName = item.name || item.primaryName || ''; aliasesText = (item.aliases || []).join(', '); accountType = item.accountType || item.typeLabel || ''; formError = ''; showModal = true; }
-  function closeModal() { editing = null; mode = 'create'; showModal = false; }
-  function aliases() { return [...new Set(aliasesText.split(',').map(value => value.trim()).filter(Boolean))]; }
+  function openCreate() { entityType = entityTypes[0] || ''; primaryReference = ''; alias = ''; formError = ''; showModal = true; }
+  function closeModal() { showModal = false; }
 
   async function save() {
-    const name = primaryName.trim(), values = aliases();
-    if (!name) { formError = 'Enter a primary name.'; return; }
-    if (values.some(value => value.toLocaleLowerCase() === name.toLocaleLowerCase())) { formError = 'An alias should be different from the primary name.'; return; }
+    const primary = primaryReference.trim(), aliasValue = alias.trim();
+    if (!entityType || !primary || !aliasValue) { formError = 'Complete all three fields and provide at least one alias.'; return; }
     saving = true; formError = '';
     try {
-      const type = selectedType;
-      const payload = { type, primaryName: name, aliases: values, ...(type === 'account' && accountType.trim() ? { accountType: accountType.trim() } : {}) };
-      if (mode === 'edit') await updateNormalizationEntry(type, editing.id, payload);
-      else await createNormalizationEntry(payload);
-      await load(); closeModal();
-    } catch (cause) { formError = cause?.message || 'Could not save this entry.'; }
+      const created = await createReferencePreference({ entityType, primaryReference: primary, alias: aliasValue });
+      savedPreferences = [created, ...savedPreferences.filter(item => item.referenceId !== created.referenceId)];
+      closeModal();
+    } catch (cause) { formError = cause?.message || 'Could not save this preference.'; }
     finally { saving = false; }
   }
 
-  load();
+  loadEntityTypes();
 </script>
 
 <section class="normalization-page">
   <div class="normalization-heading">
-    <div><p class="micro-label">YOUR LANGUAGE</p><h1>Normalization</h1><p>Teach Money Stories the names you use for merchants and accounts.</p></div>
-    <button class="add-normalization" type="button" aria-label="Add merchant or account" on:click={openCreate}>＋</button>
+    <div><p class="micro-label">YOUR LANGUAGE</p><h1>Normalization</h1><p>Teach Money Stories the names you use for merchants, beneficiaries, and accounts.</p></div>
+    <button class="add-normalization" type="button" aria-label="Add reference preference" on:click={openCreate} disabled={status !== 'ready' || !entityTypes.length}>＋</button>
   </div>
 
   {#if status === 'loading'}
     <div class="skeleton-panel normalization-skeleton"><i></i><b></b><b></b><b></b></div>
   {:else if status === 'error'}
-    <div class="section-error"><h2>Normalization is unavailable</h2><p>{error}</p><button on:click={load}>Try again</button></div>
-  {:else if items.length}
+    <div class="section-error"><h2>Normalization is unavailable</h2><p>{error}</p><button on:click={loadEntityTypes}>Try again</button></div>
+  {:else if savedPreferences.length}
     <div class="normalization-list">
-      {#each items as item}
-        <article class:expanded={expanded === entryKey(item)} class="normalization-row">
-          <button class="normalization-main" on:click={() => expanded = expanded === entryKey(item) ? null : entryKey(item)} aria-expanded={expanded === entryKey(item)}>
-            <span class={`entity-icon ${item.entityType === 'account' ? 'account' : ''}`}>{item.entityType === 'merchant' ? 'M' : '₹'}</span>
-            <span class="entity-copy"><strong>{item.name || item.primaryName}</strong><small>{item.entityType === 'account' ? (item.accountType || item.typeLabel || 'Account') : 'Merchant'} · {(item.aliases || []).length} {(item.aliases || []).length === 1 ? 'alias' : 'aliases'}</small></span>
-            <span class:open={expanded === entryKey(item)} class="normalization-chevron">⌄</span>
+      {#each savedPreferences as item}
+        <article class:expanded={expanded === item.referenceId} class="normalization-row">
+          <button class="normalization-main" on:click={() => expanded = expanded === item.referenceId ? null : item.referenceId} aria-expanded={expanded === item.referenceId}>
+            <span class={`entity-icon ${item.entityType === 'ACCOUNT' ? 'account' : ''}`}>{icons[item.entityType] || 'R'}</span>
+            <span class="entity-copy"><strong>{item.primaryReference}</strong><small>{typeLabel(item.entityType)} · {aliasesFor(item).length} {aliasesFor(item).length === 1 ? 'alias' : 'aliases'}</small></span>
+            <span class:open={expanded === item.referenceId} class="normalization-chevron">⌄</span>
           </button>
-          {#if expanded === entryKey(item)}
-            <div class="alias-details">
-              <div class="alias-label"><span>Your preferred aliases</span><button on:click={() => openEdit(item)}>Edit</button></div>
-              {#if (item.aliases || []).length}<div class="alias-pills">{#each item.aliases as alias}<span>{alias}</span>{/each}</div>
-              {:else}<p>No aliases added yet. Add the words you naturally use.</p>{/if}
-            </div>
+          {#if expanded === item.referenceId}
+            <div class="alias-details"><div class="alias-label"><span>Your preferred aliases</span></div><div class="alias-pills">{#each aliasesFor(item) as value}<span>{value}</span>{/each}</div></div>
           {/if}
         </article>
       {/each}
     </div>
   {:else}
-    <div class="empty-state normalization-empty"><span>≋</span><h2>No names yet</h2><p>Add a merchant or account with the aliases you use in messages.</p><button class="wide-button" on:click={openCreate}>＋ Add a name</button></div>
+    <div class="empty-state normalization-empty"><span>≋</span><h2>Add your first preferred name</h2><p>Choose a reference type, then enter its primary name and the aliases you use.</p><button class="wide-button" on:click={openCreate}>＋ Add a preference</button></div>
   {/if}
 
-  <aside class="normalization-tip"><span>✦</span><p><strong>How aliases work</strong> “HDFC credit card” can also respond to “credit card” or “cc”. We’ll still keep the primary name for reporting.</p></aside>
+  <aside class="normalization-tip"><span>✦</span><p><strong>How aliases work</strong> “HDFC credit card” can also respond to “credit card” or “cc”. Enter multiple aliases separated by commas.</p></aside>
 </section>
 
 {#if showModal}
   <div class="modal-backdrop normalization-modal-backdrop">
-    <div class="modal" role="dialog" aria-modal="true" aria-label={`${mode === 'edit' ? 'Edit' : 'Add'} normalization entry`}>
-      <button class="close" on:click={closeModal}>×</button><p class="micro-label">{mode === 'edit' ? 'EDIT NAME' : 'ADD NAME'}</p>
-      <h2>{mode === 'edit' ? 'Update names' : 'Add a merchant or account'}</h2>
-      <label>Type<select bind:value={selectedType} disabled={mode === 'edit'}><option value="merchant">Merchant</option><option value="account">Account</option></select></label>
-      <label>Primary name<input bind:value={primaryName} placeholder={selectedType === 'merchant' ? 'e.g. Swiggy' : 'e.g. HDFC credit card'} /></label>
-      {#if selectedType === 'account'}<label>Account type <span class="optional">Optional</span><input bind:value={accountType} placeholder="e.g. Credit card, bank account" /></label>{/if}
-      <label>Preferred aliases <span class="optional">Separate with commas</span><input bind:value={aliasesText} placeholder={selectedType === 'merchant' ? 'e.g. swiggy food, food app' : 'e.g. credit card, cc'} /></label>
-      {#if aliases().length}<div class="alias-preview">{#each aliases() as alias}<span>{alias}</span>{/each}</div>{/if}
+    <form class="modal" on:submit|preventDefault={save}>
+      <button class="close" type="button" on:click={closeModal}>×</button><p class="micro-label">ADD PREFERENCE</p><h2>Add a preferred name</h2>
+      <label>Reference type<select bind:value={entityType} required><option value="" disabled>Select a type</option>{#each entityTypes as type}<option value={type}>{typeLabel(type)}</option>{/each}</select></label>
+      <label>Primary reference<input bind:value={primaryReference} placeholder="e.g. Amazon" required /></label>
+      <label>Aliases <span class="optional">Separate with commas</span><input bind:value={alias} placeholder="e.g. AMZN, Amazon India, Amazon Store" required /></label>
       {#if formError}<p class="form-error" role="alert">{formError}</p>{/if}
-      <div class="modal-actions"><button class="secondary" on:click={closeModal}>Cancel</button><button class="primary" disabled={saving || !primaryName.trim()} on:click={save}>{saving ? 'Saving…' : 'Save'}</button></div>
-    </div>
+      <div class="modal-actions"><button class="secondary" type="button" on:click={closeModal}>Cancel</button><button class="primary" type="submit" disabled={saving || !entityType || !primaryReference.trim() || !alias.trim()}>{saving ? 'Saving…' : 'Save preference'}</button></div>
+    </form>
   </div>
 {/if}

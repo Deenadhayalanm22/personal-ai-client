@@ -9,7 +9,7 @@
   const icons = { MERCHANT: 'M', BENEFICIARY: 'B', ACCOUNT: '₹' };
   const typeLabel = type => labels[type] || type.replaceAll('_', ' ').toLowerCase().replace(/^./, value => value.toUpperCase());
   const aliasesFor = item => (item.aliases || []).map(value => typeof value === 'string' ? value : value.alias).filter(Boolean);
-  const preferencesFrom = data => Array.isArray(data) ? data : (data?.referencePreferences || data?.preferences || data?.items || []);
+  const preferencesFrom = data => Array.isArray(data) ? data : (data?.references || data?.referencePreferences || data?.preferences || data?.items || []);
 
   async function loadScreen() {
     status = 'loading'; error = '';

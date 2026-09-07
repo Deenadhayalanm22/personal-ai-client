@@ -1,5 +1,5 @@
 <script>
-  import { createReferencePreference, getReferenceEntityTypes } from './lib/api.js';
+  import { createReferencePreference, getReferenceEntityTypes, getReferencePreferences } from './lib/api.js';
 
   let status = 'loading', error = '', entityTypes = [], savedPreferences = [];
   let expanded = null, showModal = false, saving = false, formError = '';
@@ -9,16 +9,20 @@
   const icons = { MERCHANT: 'M', BENEFICIARY: 'B', ACCOUNT: '₹' };
   const typeLabel = type => labels[type] || type.replaceAll('_', ' ').toLowerCase().replace(/^./, value => value.toUpperCase());
   const aliasesFor = item => (item.aliases || []).map(value => typeof value === 'string' ? value : value.alias).filter(Boolean);
+  const preferencesFrom = data => Array.isArray(data) ? data : (data?.referencePreferences || data?.preferences || data?.items || []);
 
-  async function loadEntityTypes() {
+  async function loadScreen() {
     status = 'loading'; error = '';
     try {
-      const data = await getReferenceEntityTypes();
-      entityTypes = data?.entityTypes || [];
+      const [typeData, preferenceData] = await Promise.all([getReferenceEntityTypes(), getReferencePreferences()]);
+      entityTypes = typeData?.entityTypes || [];
+      savedPreferences = preferencesFrom(preferenceData);
       entityType = entityType || entityTypes[0] || '';
       status = 'ready';
-    } catch (cause) { status = 'error'; error = cause?.message || 'Could not load reference types.'; }
+    } catch (cause) { status = 'error'; error = cause?.message || 'Could not load reference preferences.'; }
   }
+
+  async function refreshPreferences() { savedPreferences = preferencesFrom(await getReferencePreferences()); }
 
   function openCreate() { entityType = entityTypes[0] || ''; primaryReference = ''; alias = ''; formError = ''; showModal = true; }
   function closeModal() { showModal = false; }
@@ -28,14 +32,14 @@
     if (!entityType || !primary || !aliasValue) { formError = 'Complete all three fields and provide at least one alias.'; return; }
     saving = true; formError = '';
     try {
-      const created = await createReferencePreference({ entityType, primaryReference: primary, alias: aliasValue });
-      savedPreferences = [created, ...savedPreferences.filter(item => item.referenceId !== created.referenceId)];
+      await createReferencePreference({ entityType, primaryReference: primary, alias: aliasValue });
+      await refreshPreferences();
       closeModal();
     } catch (cause) { formError = cause?.message || 'Could not save this preference.'; }
     finally { saving = false; }
   }
 
-  loadEntityTypes();
+  loadScreen();
 </script>
 
 <section class="normalization-page">
@@ -47,7 +51,7 @@
   {#if status === 'loading'}
     <div class="skeleton-panel normalization-skeleton"><i></i><b></b><b></b><b></b></div>
   {:else if status === 'error'}
-    <div class="section-error"><h2>Normalization is unavailable</h2><p>{error}</p><button on:click={loadEntityTypes}>Try again</button></div>
+    <div class="section-error"><h2>Normalization is unavailable</h2><p>{error}</p><button on:click={loadScreen}>Try again</button></div>
   {:else if savedPreferences.length}
     <div class="normalization-list">
       {#each savedPreferences as item}

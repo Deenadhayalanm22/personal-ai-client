@@ -55,3 +55,4 @@ export async function getReferenceEntityTypes() {
 }
 
 export const createReferencePreference = (preference) => request('/api/web/reference-preferences', { method: 'POST', body: JSON.stringify(preference) });
+export const getReferencePreferences = () => request('/api/web/reference-preferences');

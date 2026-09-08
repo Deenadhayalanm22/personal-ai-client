@@ -34,6 +34,16 @@ export const mockMoneyStories = {
   ]
 };
 
+const mockStoryCovers = {
+  DISCRETIONARY_FREQUENCY: { title: 'Small choices', from: '12 purchases', to: '₹1,240', detail: 'Food · Café · Entertainment' },
+  CATEGORY_SPENDING_GROWTH: { title: 'Food growth', from: '₹4,000 last month', to: '₹5,120 now', detail: '+28% this month' },
+  WEEKEND_SPENDING_PATTERN: { title: 'Weekends', from: 'Sat + Sun', to: '₹3,780', detail: '42% of the month' },
+  MERCHANT_CONCENTRATION: { title: 'Swiggy', from: '11 orders', to: '₹4,600', detail: '64% of Food & Dining' },
+  UNUSUAL_HIGH_SPEND_DAY: { title: 'One big day', from: 'Typical day ₹820', to: 'Saturday ₹2,900', detail: 'One day stood out' }
+};
+
+mockMoneyStories.stories.forEach(item => { item.cover = mockStoryCovers[item.storyType]; });
+
 function archiveFor(month) {
   const [year, monthNumber] = month.split('-').map(Number);
   const label = new Intl.DateTimeFormat('en-IN', { month: 'long', year: 'numeric' }).format(new Date(year, monthNumber - 1));

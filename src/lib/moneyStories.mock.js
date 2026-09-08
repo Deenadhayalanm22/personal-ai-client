@@ -33,17 +33,3 @@ export const mockMoneyStories = {
     ], evidence('Saturday, 7 September', transactions([['531','7 Sep','The Table','Restaurant',1850],['532','7 Sep','Uber','Transport',380],['533','7 Sep','PVR','Entertainment',450]])))
   ]
 };
-
-const copyForWeek = (stories, weekId, displayLabel) => stories.map((item, index) => ({
-  ...item,
-  storyId: `${item.storyId}_${weekId}`,
-  period: { type: 'WEEK', startDate: weekId, endDate: weekId, displayLabel },
-  generatedAt: `${weekId}T10:00:00+05:30`,
-  cards: item.cards.map(card => ({ ...card, cardId: `${card.cardId}_${index}_${weekId}` }))
-}));
-
-mockMoneyStories.storyWeeks = [
-  { id: '2026-09-07', period: { type: 'WEEK', startDate: '2026-09-07', endDate: '2026-09-13', displayLabel: '7–13 September' }, stories: copyForWeek(mockMoneyStories.stories, '2026-09-07', '7–13 September') },
-  { id: '2026-08-31', period: { type: 'WEEK', startDate: '2026-08-31', endDate: '2026-09-06', displayLabel: '31 Aug–6 Sep' }, stories: copyForWeek([mockMoneyStories.stories[1], mockMoneyStories.stories[3], mockMoneyStories.stories[4]], '2026-08-31', '31 Aug–6 Sep') },
-  { id: '2026-08-24', period: { type: 'WEEK', startDate: '2026-08-24', endDate: '2026-08-30', displayLabel: '24–30 August' }, stories: copyForWeek([mockMoneyStories.stories[0], mockMoneyStories.stories[2]], '2026-08-24', '24–30 August') }
-];

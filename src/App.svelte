@@ -2,14 +2,16 @@
   import { onMount } from 'svelte';
   import Home from './Home.svelte'; import Auth from './Auth.svelte'; import PrivacyPolicy from './PrivacyPolicy.svelte';
   import { ApiError, exchangeMagicLink, getSession, getExpenseCalendar, getRecentExpenses, getMoneyStories } from './lib/api.js';
+  import { mockMoneyStories } from './lib/moneyStories.mock.js';
   const initialPath = location.pathname.replace(/\/$/, '') || '/', isPrivacyPage = initialPath === '/privacy-policy', now = new Date(), currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   let view = isPrivacyPage ? 'privacy' : 'checking', selectedMonth = monthFromUrl(), calendarSection = state(), recentSection = state(), storiesSection = state();
+  const useMockMoneyStories = import.meta.env.VITE_USE_MOCK_MONEY_STORIES !== 'false';
   function state() { return { status: 'loading', data: null, error: '' }; }
   function monthFromUrl() { const value = new URLSearchParams(location.search).get('month'); return /^\d{4}-\d{2}$/.test(value || '') ? value : currentMonth; }
   function unauthorized() { location.replace(`/portal?next=${encodeURIComponent(location.pathname + location.search)}`); }
   async function loadCalendar() { calendarSection = { ...calendarSection, status: calendarSection.data ? 'refreshing' : 'loading', error: '' }; try { calendarSection = { status: 'ready', data: await getExpenseCalendar(selectedMonth), error: '' }; } catch (cause) { if (!(cause instanceof ApiError && cause.status === 401)) calendarSection = { ...calendarSection, status: 'error', error: cause?.message || 'Something went wrong. Please try again.' }; } }
   async function loadRecent() { recentSection = { ...recentSection, status: recentSection.data ? 'refreshing' : 'loading', error: '' }; try { recentSection = { status: 'ready', data: await getRecentExpenses(selectedMonth, 5), error: '' }; } catch (cause) { if (!(cause instanceof ApiError && cause.status === 401)) recentSection = { ...recentSection, status: 'error', error: cause?.message || 'Could not load recent transactions.' }; } }
-  async function loadStories() { storiesSection = { ...storiesSection, status: storiesSection.data ? 'refreshing' : 'loading', error: '' }; try { storiesSection = { status: 'ready', data: await getMoneyStories(selectedMonth), error: '' }; } catch (cause) { if (!(cause instanceof ApiError && cause.status === 401)) storiesSection = { ...storiesSection, status: 'error', error: cause?.message || 'Could not load Money Stories.' }; } }
+  async function loadStories() { storiesSection = { ...storiesSection, status: storiesSection.data ? 'refreshing' : 'loading', error: '' }; try { storiesSection = { status: 'ready', data: useMockMoneyStories ? { ...mockMoneyStories, month: selectedMonth } : await getMoneyStories(selectedMonth), error: '' }; } catch (cause) { if (!(cause instanceof ApiError && cause.status === 401)) storiesSection = { ...storiesSection, status: 'error', error: cause?.message || 'Could not load Money Stories.' }; } }
   async function loadApp() { view = 'dashboard'; await Promise.allSettled([loadCalendar(), loadRecent(), loadStories()]); }
   function changeMonth(month, updateHistory = true) { selectedMonth = month; if (updateHistory) history.pushState({}, '', `/dashboard?month=${encodeURIComponent(month)}`); loadCalendar(); loadRecent(); loadStories(); }
   async function initialize() {

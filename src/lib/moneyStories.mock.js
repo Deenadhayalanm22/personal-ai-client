@@ -34,6 +34,16 @@ export const mockMoneyStories = {
   ]
 };
 
+const mockCardFaces = {
+  DISCRETIONARY_FREQUENCY: { heading: 'Small choices', displayValue: '₹1,240', theme: 'warm' },
+  CATEGORY_SPENDING_GROWTH: { heading: 'Food growth', displayValue: '+28%', theme: 'focus' },
+  WEEKEND_SPENDING_PATTERN: { heading: 'Weekend rhythm', displayValue: '42%', theme: 'warm' },
+  MERCHANT_CONCENTRATION: { heading: 'Swiggy orders', displayValue: '₹4,600', theme: 'focus' },
+  UNUSUAL_HIGH_SPEND_DAY: { heading: 'One big day', displayValue: '₹2,900', theme: 'alert' }
+};
+
+mockMoneyStories.stories.forEach(item => { item.cardFace = mockCardFaces[item.storyType]; });
+
 function archiveFor(month) {
   const [year, monthNumber] = month.split('-').map(Number);
   const label = new Intl.DateTimeFormat('en-IN', { month: 'long', year: 'numeric' }).format(new Date(year, monthNumber - 1));

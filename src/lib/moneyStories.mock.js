@@ -33,3 +33,27 @@ export const mockMoneyStories = {
     ], evidence('Saturday, 7 September', transactions([['531','7 Sep','The Table','Restaurant',1850],['532','7 Sep','Uber','Transport',380],['533','7 Sep','PVR','Entertainment',450]])))
   ]
 };
+
+function archiveFor(month) {
+  const [year, monthNumber] = month.split('-').map(Number);
+  const label = new Intl.DateTimeFormat('en-IN', { month: 'long', year: 'numeric' }).format(new Date(year, monthNumber - 1));
+  const stories = JSON.parse(JSON.stringify(mockMoneyStories.stories.slice(0, 3))).map((item, index) => ({
+    ...item,
+    storyId: `${item.storyId}_${month}`,
+    period: { type: 'MONTH', startDate: `${month}-01`, endDate: `${month}-28`, displayLabel: label },
+    generatedAt: `${month}-28T10:00:00+05:30`,
+    cards: item.cards.map(cardItem => ({
+      ...cardItem,
+      cardId: `${cardItem.cardId}_${month}_${index}`,
+      title: cardItem.title.replaceAll('September', label),
+      body: cardItem.body.replaceAll('September', label).replaceAll('Sep', 'Aug')
+    })),
+    evidence: {
+      ...item.evidence,
+      transactions: item.evidence.transactions.map(transaction => ({ ...transaction, dateLabel: transaction.dateLabel.replace('Sep', 'Aug') }))
+    }
+  }));
+  return { month, currency: 'INR', timezone: 'Asia/Kolkata', stories };
+}
+
+export const getMockMoneyStories = month => month === '2026-09' ? { ...mockMoneyStories, month } : archiveFor(month);

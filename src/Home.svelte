@@ -6,7 +6,7 @@
 
   let activeView = 'calendar', selectedDay = null, activityTab = 'recent', dayItems = [], dayStatus = 'idle', dayError = '', showAll = false, expandedId = null;
   let openedStory = null, handoff = null, addingContext = false, actionError = '', loggingOut = false, signOutError = '';
-  let storySlide = 0, storyTouchStart = null, showStoryEvidence = false, viewedStoryIds = [];
+  let storySlide = 0, storyTouchStart = null, showStoryEvidence = false, viewedStoryIds = [], viewedStoryRevisions = {};
   let editing = null, editAmount = '', editDate = '', editCategory = '', editSubcategory = '', editMerchantId = '', saving = false, deleting = null;
   let editOptions = { categories: [], merchants: [] }, optionsStatus = 'idle', optionsError = '';
   $: data = calendarSection.data || {}; $: currency = data.currency || 'INR'; $: calendar = buildCalendar(selectedMonth, data.days || []);
@@ -28,29 +28,17 @@
   function monthLabel(value) { const [y,m] = value.split('-').map(Number); return new Intl.DateTimeFormat(undefined,{month:'long',year:'numeric'}).format(new Date(y,m-1)); }
   function greeting() { const h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'; }
   function isoDate(day) { return `${selectedMonth}-${String(day).padStart(2,'0')}`; }
-  const number = value => Number(value || 0);
-  const discretionaryStory = story => /discretionary/i.test(`${story.type || ''} ${story.kind || ''} ${story.storyType || ''}`) || number(story.discretionarySpend) > 0;
-  function storyMetrics(story) {
-    const discretionary = number(story.discretionarySpend || story.amount);
-    const essential = number(story.essentialSpend || story.essentialAmount);
-    const percent = Math.round(number(story.comparisonPercent || story.impactPercent || (essential ? discretionary / essential * 100 : 0)));
-    return { discretionary, essential, percent, count: number(story.discretionaryTransactionCount || story.transactionCount), period: story.periodLabel || 'this week' };
-  }
-  function storyCards(story) {
-    const metrics = storyMetrics(story);
-    return [
-      { eyebrow: '1 · A pattern worth noticing', title: `Small discretionary spends added up ${metrics.period}`, body: metrics.count ? `${metrics.count} discretionary purchases came to ${money(metrics.discretionary)}.` : `Your discretionary spending came to ${money(metrics.discretionary)}.`, tone: 'notice' },
-      { eyebrow: '2 · Put it in context', title: metrics.essential ? `That’s ${metrics.percent}% of your essential spending` : 'Here’s what this spending adds up to', body: metrics.essential ? `You spent ${money(metrics.essential)} on essentials in the same period. For every ₹100 on essentials, ₹${metrics.percent} went to discretionary choices.` : story.summary || 'Seeing the total together makes the pattern easier to spot.', tone: 'compare' },
-      { eyebrow: '3 · One small experiment', title: 'Keep the choices. Make them intentional.', body: 'Before your next discretionary purchase, pause for ten seconds and ask: “Is this worth it to me today?” Even one skipped repeat can change next week’s story.', tone: 'action' }
-    ];
-  }
   const hasDeck = story => Array.isArray(story.cards) && story.cards.length > 0;
   const storyName = story => String(story.storyType || story.type || 'Money story').replaceAll('_', ' ');
   const storyTone = story => story.cardFace?.theme || 'calm';
   const storyCardFace = story => story.cardFace || { heading: 'Money story', displayValue: 'View', theme: 'calm' };
-  const storyWasViewed = story => viewedStoryIds.includes(story.storyId || story.id);
-  function storyRingStyle(story) { const count = Math.max(1, story.cards?.length || 1), color = storyWasViewed(story) ? '#22684f' : '#b6d0b8', gap = 5, segment = 360 / count; return `background:conic-gradient(${Array.from({ length: count }, (_, index) => `${color} ${index * segment}deg ${((index + 1) * segment) - gap}deg,transparent ${((index + 1) * segment) - gap}deg ${(index + 1) * segment}deg`).join(',')})`; }
-  function openStory(story) { openedStory = story; storySlide = 0; showStoryEvidence = false; const id = story.storyId || story.id; if (id && !viewedStoryIds.includes(id)) viewedStoryIds = [...viewedStoryIds, id]; }
+  const storyKey = story => story.logicalStoryId || story.storyId || story.id;
+  const storyWasViewed = story => viewedStoryIds.includes(storyKey(story));
+  const storyWasUpdated = story => Boolean(story.updatedReason && story.revision != null && viewedStoryRevisions[storyKey(story)] != null && viewedStoryRevisions[storyKey(story)] !== story.revision);
+  const isObservation = story => story.level === 'OBSERVATION';
+  const observationPartLabel = part => part.label || part.subcategoryLabel || part.categoryLabel || '';
+  const observationPartValue = part => part.displayValue || part.amount?.displayValue || '';
+  function openStory(story) { openedStory = story; storySlide = 0; showStoryEvidence = false; const id = storyKey(story); if (id && !viewedStoryIds.includes(id)) viewedStoryIds = [...viewedStoryIds, id]; if (id && story.revision != null) viewedStoryRevisions = { ...viewedStoryRevisions, [id]: story.revision }; }
   function endStorySwipe(event, length) { if (storyTouchStart === null) return; const distance = event.changedTouches[0].clientX - storyTouchStart; if (Math.abs(distance) > 45) storySlide = Math.max(0, Math.min(length - 1, storySlide + (distance < 0 ? 1 : -1))); storyTouchStart = null; }
   function buildCalendar(monthValue, apiDays) { const [y,m]=monthValue.split('-').map(Number), count=new Date(y,m,0).getDate(), leading=(new Date(y,m-1,1).getDay()+6)%7, values=new Map(apiDays.map(x=>[Number(String(x.date).slice(-2)),x])), today=new Date(), current=today.getFullYear()===y&&today.getMonth()+1===m; return {leading,days:Array.from({length:count},(_,i)=>{const day=i+1,v=values.get(day)||{};return{day,totalSpend:Number(v.totalSpend||0),transactionCount:Number(v.transactionCount||0),intensity:Math.max(0,Math.min(4,Number(v.intensity||0))),future:current&&day>today.getDate()}})}; }
   async function selectDate(day) { if (!day || day.future) return; selectedDay=day.day; activityTab='day'; showAll=false; expandedId=null; actionError=''; await loadDay(); }
@@ -69,7 +57,7 @@
 
 <header class="portal-topbar"><a class="wordmark" href="/dashboard"><span>₹</span>Money Stories</a><label class="month-switcher"><button type="button" aria-label="Previous month" on:click={()=>changeMonth(-1)}>←</button><input aria-label="Select month" type="month" value={selectedMonth} max={currentLocalMonth()} on:change={e=>{selectedDay=null;dayItems=[];activityTab='recent';onMonthChange(e.currentTarget.value)}}/><button type="button" aria-label="Next month" on:click={()=>changeMonth(1)}>→</button></label></header>
 <section class="top-greeting"><section class="app-heading"><div><p class="micro-label">{monthName(selectedMonth).toUpperCase()}</p><h1>{greeting()}</h1><p>Your recorded spending, one day at a time.</p></div><button class="profile-button" on:click={signOut} disabled={loggingOut} aria-label="Sign out">{loggingOut?'…':'D'}</button></section>{#if signOutError}<div class="notice error">{signOutError}</div>{/if}</section>
-<div class="top-story-rail"><SectionState section={storiesSection} title="Money Stories" retry={refreshStories}><section class="story-rail-section"><div class="section-title"><div><p class="micro-label">MONEY CHAPTERS</p><h2>{monthLabel(selectedMonth)} patterns</h2></div><span>{stories.length} stories</span></div><div class="chapter-shelf" aria-label="Money Chapters">{#each stories as story}{@const face = storyCardFace(story)}<button class:viewed={storyWasViewed(story)} class={`money-chapter ${storyTone(story)}`} on:click={()=>openStory(story)}><span class="chapter-marks" aria-label={`${story.cards?.length || 1} chapters`}>{#each Array(story.cards?.length || 1) as _}<i></i>{/each}</span><strong>{face.heading}</strong><b>{face.displayValue}</b></button>{:else}<div class="story-rail-empty">No stories were created for this month.</div>{/each}</div></section></SectionState></div>
+<div class="top-story-rail"><SectionState section={storiesSection} title="Money Stories" retry={refreshStories}><section class="story-rail-section"><div class="section-title"><div><p class="micro-label">MONEY CHAPTERS</p><h2>{monthLabel(selectedMonth)} patterns</h2></div><span>{stories.length} stories</span></div><div class="chapter-shelf" aria-label="Money Chapters">{#each stories as story}{@const face = storyCardFace(story)}<button class:viewed={storyWasViewed(story)} class={`money-chapter ${storyTone(story)}`} on:click={()=>openStory(story)}><span class="chapter-marks" aria-label={`${story.cards?.length || 1} chapters`}>{#each Array(story.cards?.length || 1) as _}<i></i>{/each}</span><strong>{face.heading}</strong><b>{face.displayValue}</b>{#if storyWasUpdated(story)}<small class="story-updated">Updated</small>{/if}</button>{:else}<div class="story-rail-empty">No stories were created for this month.</div>{/each}</div></section></SectionState></div>
 <div class="workspace-divider" aria-hidden="true"><span>YOUR SPENDING LOG</span></div>
 <nav class="primary-view-nav" aria-label="Main sections"><button class:active={activeView==='calendar'} on:click={()=>activeView='calendar'}><span>▦</span> Calendar</button><button class:active={activeView==='normalization'} on:click={()=>activeView='normalization'}><span>≋</span> Normalization</button></nav>
 {#if activeView === 'normalization'}
@@ -78,36 +66,29 @@
 <main class="story-shell">
 {#if openedStory}<div class="story-reader-backdrop" role="presentation" on:click={()=>openedStory=null}><section class="story-detail" role="dialog" aria-modal="true" on:click|stopPropagation><button class="back-button" on:click={()=>openedStory=null}>← Back to stories</button><p class="micro-label">{storyName(openedStory)} · {openedStory.period?.displayLabel || monthLabel(selectedMonth)}</p>
 {#if hasDeck(openedStory)}
-  {@const cards = openedStory.cards.slice().sort((a,b)=>a.sequence-b.sequence)}
+  {@const cards = openedStory.cards.slice().sort((a,b)=>(a.sequence || 0)-(b.sequence || 0))}
   {@const currentCard = cards[storySlide]}
-  <div class="story-deck" aria-label={storyName(openedStory)}>
-    <div class="story-progress" aria-hidden="true">{#each cards as _, index}<i class:active={index===storySlide}></i>{/each}</div>
-    <article class={`story-slide deck-theme-${currentCard.theme || 'WARM_NOTICE'}`} on:touchstart={event=>storyTouchStart=event.touches[0].clientX} on:touchend={event=>endStorySwipe(event,cards.length)}>
-      <p class="slide-eyebrow">{currentCard.sequence} · {currentCard.eyebrow}</p>
-      {#if currentCard.layout === 'HERO_STAT' && currentCard.components?.[0]}<div class="story-amount"><span>{currentCard.components[0].label}</span><strong>{currentCard.components[0].displayValue}</strong></div>{/if}
-      {#if currentCard.layout === 'TWO_STAT_COMPARISON'}<div class="spend-compare">{#each currentCard.components || [] as component}<div><span>{component.label}</span><strong>{component.displayValue}</strong></div>{/each}</div>{/if}
-      <h1>{currentCard.title}</h1><p>{currentCard.body}</p>
+  {@const canNavigate = cards.length > 1}
+  <div class:observation-deck={isObservation(openedStory)} class="story-deck" aria-label={storyName(openedStory)}>
+    {#if canNavigate}<div class="story-progress" aria-label={`${storySlide + 1} of ${cards.length}`}>{#each cards as _, index}<i class:active={index===storySlide}></i>{/each}</div>{/if}
+    <article class:observation-card={isObservation(openedStory)} class={`story-slide deck-theme-${currentCard.theme || 'CALM_CONTEXT'}`} on:touchstart={event=>canNavigate&&(storyTouchStart=event.touches[0].clientX)} on:touchend={event=>canNavigate&&endStorySwipe(event,cards.length)}>
+      {#if currentCard.eyebrow}<p class="slide-eyebrow">{currentCard.eyebrow}</p>{/if}
+      {#if isObservation(openedStory)}
+        {#if openedStory.observation?.kind === 'CONTRIBUTOR' && openedStory.observation.sharePercent != null}<div class="contribution-bar" aria-label={`Contribution share ${openedStory.observation.sharePercent}%`}><i style={`width:${openedStory.observation.sharePercent}%`}></i></div>{/if}
+        <h1>{currentCard.title}</h1><p>{currentCard.body}</p>
+        {#if currentCard.components?.length}<div class="observation-components">{#each currentCard.components as component}<div><span>{component.label}</span><strong>{component.displayValue}</strong></div>{/each}</div>{/if}
+        {#if openedStory.observation?.kind === 'BREAKDOWN' && openedStory.observation.parts?.length}<div class="observation-parts">{#each openedStory.observation.parts as part}<div><span>{observationPartLabel(part)}</span><strong>{observationPartValue(part)}</strong></div>{/each}</div>{/if}
+      {:else}
+        {#if currentCard.layout === 'HERO_STAT' && currentCard.components?.[0]}<div class="story-amount"><span>{currentCard.components[0].label}</span><strong>{currentCard.components[0].displayValue}</strong></div>{/if}
+        {#if currentCard.layout === 'TWO_STAT_COMPARISON'}<div class="spend-compare">{#each currentCard.components || [] as component}<div><span>{component.label}</span><strong>{component.displayValue}</strong></div>{/each}</div>{/if}
+        <h1>{currentCard.title}</h1><p>{currentCard.body}</p>
+        {#if currentCard.layout !== 'HERO_STAT' && currentCard.layout !== 'TWO_STAT_COMPARISON' && currentCard.components?.length}<div class="observation-components">{#each currentCard.components as component}<div><span>{component.label}</span><strong>{component.displayValue}</strong></div>{/each}</div>{/if}
+      {/if}
       {#each currentCard.actions || [] as action}{#if action.type === 'OPEN_EVIDENCE'}<button class="story-action" on:click={()=>showStoryEvidence=true}>{action.label}</button>{/if}{/each}
     </article>
-    <div class="story-deck-controls"><button aria-label="Previous story card" disabled={storySlide===0} on:click={()=>storySlide-=1}>←</button><span>{storySlide + 1} of {cards.length}</span><button aria-label="Next story card" disabled={storySlide===cards.length-1} on:click={()=>storySlide+=1}>{storySlide===cards.length-1?'Done':'Next →'}</button></div>
+    {#if canNavigate}<div class="story-deck-controls"><button aria-label="Previous story card" disabled={storySlide===0} on:click={()=>storySlide-=1}>←</button><span>{storySlide + 1} of {cards.length}</span><button aria-label="Next story card" disabled={storySlide===cards.length-1} on:click={()=>storySlide+=1}>{storySlide===cards.length-1?'Done':'Next →'}</button></div>{/if}
   </div>
-  {#if showStoryEvidence}<div class="modal-backdrop evidence-backdrop" role="presentation" on:click={()=>showStoryEvidence=false}><section class="modal story-evidence-sheet" role="dialog" aria-modal="true" aria-label={openedStory.evidence?.title} on:click|stopPropagation><button class="close" on:click={()=>showStoryEvidence=false}>×</button><p class="micro-label">TRANSACTIONS BEHIND THIS STORY</p><h2>{openedStory.evidence?.title}</h2><p class="evidence-total">{openedStory.evidence?.totalCount} purchases · {openedStory.evidence?.totalAmount?.displayValue}</p><div class="evidence-list">{#each openedStory.evidence?.transactions || [] as item}<div class="evidence-row"><div><strong>{item.merchantLabel}</strong><span>{item.dateLabel} · {item.categoryLabel}</span></div><b>− {item.amount.displayValue}</b></div>{/each}</div></section></div>{/if}
-{:else if discretionaryStory(openedStory)}
-  {@const cards = storyCards(openedStory)}
-  <div class="story-deck" aria-label="Discretionary spending story">
-    <div class="story-progress" aria-hidden="true">{#each cards as _, index}<i class:active={index===storySlide}></i>{/each}</div>
-    <article class={`story-slide ${cards[storySlide].tone}`} on:touchstart={event=>storyTouchStart=event.touches[0].clientX} on:touchend={event=>endStorySwipe(event,cards.length)}>
-      <p class="slide-eyebrow">{cards[storySlide].eyebrow}</p>
-      {#if cards[storySlide].tone === 'notice'}<div class="story-amount"><span>Discretionary</span><strong>{money(storyMetrics(openedStory).discretionary)}</strong></div>{/if}
-      {#if cards[storySlide].tone === 'compare'}<div class="spend-compare"><div><span>Discretionary</span><strong>{money(storyMetrics(openedStory).discretionary)}</strong></div><div><span>Essentials</span><strong>{money(storyMetrics(openedStory).essential)}</strong></div></div>{/if}
-      <h1>{cards[storySlide].title}</h1><p>{cards[storySlide].body}</p>
-      {#if cards[storySlide].tone === 'action'}<button class="story-action" on:click={()=>openedStory=null}>I’ll notice next time</button>{/if}
-    </article>
-    <div class="story-deck-controls"><button aria-label="Previous story card" disabled={storySlide===0} on:click={()=>storySlide-=1}>←</button><span>{storySlide + 1} of {cards.length}</span><button aria-label="Next story card" disabled={storySlide===cards.length-1} on:click={()=>storySlide+=1}>Next →</button></div>
-  </div>
-  {#if openedStory.evidence?.length}<details class="story-evidence"><summary>See the purchases behind this story ({openedStory.evidence.length})</summary><div class="evidence-list">{#each openedStory.evidence as item}<div class="evidence-row"><div><strong>{merchant(item)}</strong><span>{category(item)} · {dateLabel(transactionDate(item))}</span></div><b>− {money(item.amount)}</b></div>{/each}</div></details>{/if}
-{:else}
-  <h1>{openedStory.headline}</h1><p class="detail-copy">{openedStory.explanation}</p><div class="evidence-list">{#each openedStory.evidence||[] as item}<div class="evidence-row"><div><strong>{merchant(item)}</strong><span>{category(item)} · {dateLabel(transactionDate(item))}</span></div><b>− {money(item.amount)}</b></div>{/each}</div>
+  {#if showStoryEvidence}<div class="modal-backdrop evidence-backdrop" role="presentation" on:click={()=>showStoryEvidence=false}><section class="modal story-evidence-sheet" role="dialog" aria-modal="true" aria-label={openedStory.evidence?.title} on:click|stopPropagation><button class="close" on:click={()=>showStoryEvidence=false}>×</button><p class="micro-label">TRANSACTIONS BEHIND THIS STORY</p><h2>{openedStory.evidence?.title}</h2><p class="evidence-total">{openedStory.evidence?.totalCount} purchases · {openedStory.evidence?.totalAmount?.displayValue}</p><div class="evidence-list">{#each openedStory.evidence?.transactions || [] as item}<div class="evidence-row"><div><strong>{item.merchantLabel}</strong><span>{item.dateLabel} · {item.categoryLabel}{item.subcategoryLabel ? ` · ${item.subcategoryLabel}` : ''}</span></div><b>− {item.amount.displayValue}</b></div>{/each}</div>{#each openedStory.evidence?.actions || [] as action}{#if action.type === 'REPORT_CLASSIFICATION'}<button class="report-classification" type="button">{action.label}</button>{/if}{/each}</section></div>{/if}
 {/if}</section></div>
 {/if}
 <SectionState section={calendarSection} title="Spending calendar" retry={refreshCalendar}><section class="month-card"><div class="section-title"><div><p class="micro-label">MONTH AT A GLANCE</p><h2>{monthLabel(selectedMonth)}</h2></div><span>{data.recordedDays||0} recorded days</span></div><div class="month-summary"><div><span>Total recorded</span><strong>{money(data.totalSpend)}</strong></div><div><span>Transactions</span><strong>{data.transactionCount||0}</strong></div><div><span>Highest day</span><strong>{money(data.highestSpend)}</strong></div></div><div class="weekdays">{#each ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'] as d}<span>{d}</span>{/each}</div><div class="calendar">{#each Array(calendar.leading) as _}<span></span>{/each}{#each calendar.days as d}<button class:future={d.future} class:selected={selectedDay===d.day} class={`level-${d.intensity}`} disabled={d.future} on:click={()=>selectDate(d)}>{d.day}</button>{/each}</div><div class="legend"><span>Lower spend</span><div>{#each [0,1,2,3,4] as l}<i class={`level-${l}`}></i>{/each}</div><span>Higher spend</span></div></section></SectionState>

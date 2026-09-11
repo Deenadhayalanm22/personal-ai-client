@@ -3,6 +3,7 @@
 
   let status = 'loading', error = '', entityTypes = [], savedPreferences = [];
   let expanded = null, showModal = false, saving = false, formError = '';
+  let activeMerge = 'hdfc', selectedMerchant = 'HDFC Bank', mergeNotice = '';
   let entityType = '', primaryReference = '', alias = '';
 
   const labels = { MERCHANT: 'Merchant', BENEFICIARY: 'Beneficiary', ACCOUNT: 'Account' };
@@ -10,6 +11,20 @@
   const typeLabel = type => labels[type] || type.replaceAll('_', ' ').toLowerCase().replace(/^./, value => value.toUpperCase());
   const aliasesFor = item => (item.aliases || []).map(value => typeof value === 'string' ? value : value.alias).filter(Boolean);
   const preferencesFrom = data => Array.isArray(data) ? data : (data?.references || data?.referencePreferences || data?.preferences || data?.items || []);
+  const mergeCandidates = [
+    { id: 'hdfc', confidence: 'Likely same merchant', count: 18, labels: [
+      { name: 'HDFC Bank account', detail: '9 transactions', icon: 'H' },
+      { name: 'HDFC UPI', detail: '6 transactions', icon: 'U' },
+      { name: 'Bank account', detail: '3 transactions', icon: 'B' }
+    ] },
+    { id: 'swiggy', confidence: 'Needs your review', count: 7, labels: [
+      { name: 'Swiggy', detail: '5 transactions', icon: 'S' },
+      { name: 'Swiggy Instamart', detail: '2 transactions', icon: 'S' }
+    ] }
+  ];
+  $: mergeGroup = mergeCandidates.find(group => group.id === activeMerge) || mergeCandidates[0];
+  function chooseMergeGroup(id) { activeMerge = id; selectedMerchant = mergeCandidates.find(group => group.id === id)?.labels[0]?.name || ''; mergeNotice = ''; }
+  function confirmMerge() { mergeNotice = `${mergeGroup.count} transactions will now appear under ${selectedMerchant}.`; }
 
   async function loadScreen() {
     status = 'loading'; error = '';
@@ -47,6 +62,42 @@
     <div><p class="micro-label">YOUR LANGUAGE</p><h1>Normalization</h1><p>Teach Money Stories the names you use for merchants, beneficiaries, and accounts.</p></div>
     <button class="add-normalization" type="button" aria-label="Add reference preference" on:click={openCreate} disabled={status !== 'ready' || !entityTypes.length}>＋</button>
   </div>
+
+  <section class="merge-workspace" aria-labelledby="merchant-merge-title">
+    <div class="merge-title-row">
+      <div><p class="micro-label">MERCHANT CLEANUP</p><h2 id="merchant-merge-title">Merge duplicate merchants</h2><p>We found labels that may describe the same place. Review them before combining your history.</p></div>
+      <span class="merge-count">{mergeCandidates.length} to review</span>
+    </div>
+    <div class="merge-layout">
+      <div class="merge-candidate-list" aria-label="Merchant merge suggestions">
+        {#each mergeCandidates as group}
+          <button class:active={activeMerge === group.id} class="merge-candidate" type="button" on:click={() => chooseMergeGroup(group.id)}>
+            <span class="candidate-stack" aria-hidden="true"><i>{group.labels[0].icon}</i><i>{group.labels[1].icon}</i></span>
+            <span><strong>{group.labels.map(item => item.name).join(' + ')}</strong><small>{group.count} transactions · {group.confidence}</small></span>
+            <span class="candidate-arrow">›</span>
+          </button>
+        {/each}
+      </div>
+      {#if mergeGroup}
+        <div class="merge-review">
+          <div class="merge-review-heading"><span class="merge-spark">✦</span><div><strong>{mergeGroup.confidence}</strong><small>Based on similar payment references</small></div></div>
+          <p class="merge-instruction">Which name should represent these transactions?</p>
+          <div class="merge-label-options" role="radiogroup" aria-label="Choose the merchant name to keep">
+            {#each mergeGroup.labels as label}
+              <button class:selected={selectedMerchant === label.name} type="button" role="radio" aria-checked={selectedMerchant === label.name} on:click={() => { selectedMerchant = label.name; mergeNotice = ''; }}>
+                <span class="merge-label-icon">{label.icon}</span><span><strong>{label.name}</strong><small>{label.detail}</small></span><span class="radio-dot"></span>
+              </button>
+            {/each}
+          </div>
+          <button class="merge-button" type="button" on:click={confirmMerge}>Merge as “{selectedMerchant}”</button>
+          <p class="merge-footnote">The other names will stay searchable as aliases.</p>
+          {#if mergeNotice}<p class="merge-success" role="status">✓ {mergeNotice}</p>{/if}
+        </div>
+      {/if}
+    </div>
+  </section>
+
+  <div class="saved-preferences-heading"><p class="micro-label">SAVED NAMES</p><h2>Your normalization rules</h2></div>
 
   {#if status === 'loading'}
     <div class="skeleton-panel normalization-skeleton"><i></i><b></b><b></b><b></b></div>

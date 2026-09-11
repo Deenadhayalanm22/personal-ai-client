@@ -3,7 +3,7 @@
 
   let status = 'loading', error = '', entityTypes = [], savedPreferences = [];
   let expanded = null, showModal = false, saving = false, formError = '';
-  let activeMerge = 'hdfc', selectedMerchant = 'HDFC Bank', mergeNotice = '';
+  let selectedMerchantIds = [], selectedMerchant = '', showMergeModal = false, mergeNotice = '';
   let entityType = '', primaryReference = '', alias = '';
 
   const labels = { MERCHANT: 'Merchant', BENEFICIARY: 'Beneficiary', ACCOUNT: 'Account' };
@@ -11,20 +11,19 @@
   const typeLabel = type => labels[type] || type.replaceAll('_', ' ').toLowerCase().replace(/^./, value => value.toUpperCase());
   const aliasesFor = item => (item.aliases || []).map(value => typeof value === 'string' ? value : value.alias).filter(Boolean);
   const preferencesFrom = data => Array.isArray(data) ? data : (data?.references || data?.referencePreferences || data?.preferences || data?.items || []);
-  const mergeCandidates = [
-    { id: 'hdfc', confidence: 'Likely same merchant', count: 18, labels: [
-      { name: 'HDFC Bank account', detail: '9 transactions', icon: 'H' },
-      { name: 'HDFC UPI', detail: '6 transactions', icon: 'U' },
-      { name: 'Bank account', detail: '3 transactions', icon: 'B' }
-    ] },
-    { id: 'swiggy', confidence: 'Needs your review', count: 7, labels: [
-      { name: 'Swiggy', detail: '5 transactions', icon: 'S' },
-      { name: 'Swiggy Instamart', detail: '2 transactions', icon: 'S' }
-    ] }
+  const merchantsForMerge = [
+    { id: 101, name: 'HDFC Bank account', transactionCount: 9, icon: 'H' },
+    { id: 214, name: 'HDFC UPI', transactionCount: 6, icon: 'U' },
+    { id: 319, name: 'Bank account', transactionCount: 3, icon: 'B' },
+    { id: 408, name: 'Swiggy', transactionCount: 5, icon: 'S' },
+    { id: 452, name: 'Swiggy Instamart', transactionCount: 2, icon: 'S' }
   ];
-  $: mergeGroup = mergeCandidates.find(group => group.id === activeMerge) || mergeCandidates[0];
-  function chooseMergeGroup(id) { activeMerge = id; selectedMerchant = mergeCandidates.find(group => group.id === id)?.labels[0]?.name || ''; mergeNotice = ''; }
-  function confirmMerge() { mergeNotice = `${mergeGroup.count} transactions will now appear under ${selectedMerchant}.`; }
+  $: selectedMerchants = merchantsForMerge.filter(merchant => selectedMerchantIds.includes(merchant.id));
+  $: selectedTransactionCount = selectedMerchants.reduce((total, merchant) => total + merchant.transactionCount, 0);
+  function toggleMerchant(id) { selectedMerchantIds = selectedMerchantIds.includes(id) ? selectedMerchantIds.filter(value => value !== id) : [...selectedMerchantIds, id]; mergeNotice = ''; }
+  function openMerge() { if (selectedMerchants.length < 2) return; selectedMerchant = selectedMerchants[0].id; showMergeModal = true; }
+  function closeMerge() { showMergeModal = false; }
+  function confirmMerge() { const merchant = merchantsForMerge.find(item => item.id === Number(selectedMerchant)); mergeNotice = `${selectedTransactionCount} transactions are now grouped under ${merchant?.name}.`; selectedMerchantIds = []; closeMerge(); }
 
   async function loadScreen() {
     status = 'loading'; error = '';
@@ -65,36 +64,18 @@
 
   <section class="merge-workspace" aria-labelledby="merchant-merge-title">
     <div class="merge-title-row">
-      <div><p class="micro-label">MERCHANT CLEANUP</p><h2 id="merchant-merge-title">Merge duplicate merchants</h2><p>We found labels that may describe the same place. Review them before combining your history.</p></div>
-      <span class="merge-count">{mergeCandidates.length} to review</span>
+      <div><p class="micro-label">MERCHANT CLEANUP</p><h2 id="merchant-merge-title">Merge merchant names</h2><p>Select two or more names that refer to the same merchant, then choose the name to keep.</p></div>
     </div>
-    <div class="merge-layout">
-      <div class="merge-candidate-list" aria-label="Merchant merge suggestions">
-        {#each mergeCandidates as group}
-          <button class:active={activeMerge === group.id} class="merge-candidate" type="button" on:click={() => chooseMergeGroup(group.id)}>
-            <span class="candidate-stack" aria-hidden="true"><i>{group.labels[0].icon}</i><i>{group.labels[1].icon}</i></span>
-            <span><strong>{group.labels.map(item => item.name).join(' + ')}</strong><small>{group.count} transactions · {group.confidence}</small></span>
-            <span class="candidate-arrow">›</span>
-          </button>
-        {/each}
-      </div>
-      {#if mergeGroup}
-        <div class="merge-review">
-          <div class="merge-review-heading"><span class="merge-spark">✦</span><div><strong>{mergeGroup.confidence}</strong><small>Based on similar payment references</small></div></div>
-          <p class="merge-instruction">Which name should represent these transactions?</p>
-          <div class="merge-label-options" role="radiogroup" aria-label="Choose the merchant name to keep">
-            {#each mergeGroup.labels as label}
-              <button class:selected={selectedMerchant === label.name} type="button" role="radio" aria-checked={selectedMerchant === label.name} on:click={() => { selectedMerchant = label.name; mergeNotice = ''; }}>
-                <span class="merge-label-icon">{label.icon}</span><span><strong>{label.name}</strong><small>{label.detail}</small></span><span class="radio-dot"></span>
-              </button>
-            {/each}
-          </div>
-          <button class="merge-button" type="button" on:click={confirmMerge}>Merge as “{selectedMerchant}”</button>
-          <p class="merge-footnote">The other names will stay searchable as aliases.</p>
-          {#if mergeNotice}<p class="merge-success" role="status">✓ {mergeNotice}</p>{/if}
-        </div>
-      {/if}
+    <div class="merchant-selection" aria-label="Select merchants to merge">
+      {#each merchantsForMerge as merchant}
+        <label class:selected={selectedMerchantIds.includes(merchant.id)} class="merchant-option">
+          <input type="checkbox" checked={selectedMerchantIds.includes(merchant.id)} on:change={() => toggleMerchant(merchant.id)} />
+          <span class="merge-label-icon">{merchant.icon}</span><span><strong>{merchant.name}</strong><small>{merchant.transactionCount} {merchant.transactionCount === 1 ? 'transaction' : 'transactions'}</small></span>
+        </label>
+      {/each}
     </div>
+    <div class="merge-selection-footer"><span>{selectedMerchants.length ? `${selectedMerchants.length} names · ${selectedTransactionCount} transactions selected` : 'Select at least two names to merge'}</span><button class="merge-button" type="button" disabled={selectedMerchants.length < 2} on:click={openMerge}>Merge selected</button></div>
+    {#if mergeNotice}<p class="merge-success" role="status">✓ {mergeNotice}</p>{/if}
   </section>
 
   <div class="saved-preferences-heading"><p class="micro-label">SAVED NAMES</p><h2>Your normalization rules</h2></div>
@@ -135,5 +116,22 @@
       {#if formError}<p class="form-error" role="alert">{formError}</p>{/if}
       <div class="modal-actions"><button class="secondary" type="button" on:click={closeModal}>Cancel</button><button class="primary" type="submit" disabled={saving || !entityType || !primaryReference.trim() || !alias.trim()}>{saving ? 'Saving…' : 'Save preference'}</button></div>
     </form>
+  </div>
+{/if}
+
+{#if showMergeModal}
+  <div class="modal-backdrop normalization-modal-backdrop">
+    <div class="modal merge-modal" role="dialog" aria-modal="true" aria-labelledby="merge-modal-title" tabindex="-1">
+      <button class="close" type="button" on:click={closeMerge}>×</button><p class="micro-label">MERGE {selectedMerchants.length} MERCHANT NAMES</p><h2 id="merge-modal-title">Choose the name to keep</h2>
+      <p class="merge-modal-copy">All {selectedTransactionCount} selected transactions will use this name. The others will remain as aliases.</p>
+      <div class="merge-label-options" role="radiogroup" aria-label="Choose the merchant name to keep">
+        {#each selectedMerchants as merchant}
+          <button class:selected={Number(selectedMerchant) === merchant.id} type="button" role="radio" aria-checked={Number(selectedMerchant) === merchant.id} on:click={() => selectedMerchant = merchant.id}>
+            <span class="merge-label-icon">{merchant.icon}</span><span><strong>{merchant.name}</strong><small>{merchant.transactionCount} transactions</small></span><span class="radio-dot"></span>
+          </button>
+        {/each}
+      </div>
+      <div class="modal-actions"><button class="secondary" type="button" on:click={closeMerge}>Cancel</button><button class="primary" type="button" on:click={confirmMerge}>Merge merchants</button></div>
+    </div>
   </div>
 {/if}

@@ -3,7 +3,7 @@
 
   let status = 'loading', error = '', entityTypes = [], savedPreferences = [];
   let expanded = null, showModal = false, saving = false, formError = '';
-  let selectedMerchantIds = [], selectedMerchant = '', showMergeModal = false, mergeNotice = '';
+  let selectedMerchantIds = [], preferredMerchantName = '', showMergeModal = false, mergeNotice = '';
   let entityType = '', primaryReference = '', alias = '';
 
   const labels = { MERCHANT: 'Merchant', BENEFICIARY: 'Beneficiary', ACCOUNT: 'Account' };
@@ -21,9 +21,9 @@
   $: selectedMerchants = merchantsForMerge.filter(merchant => selectedMerchantIds.includes(merchant.id));
   $: selectedTransactionCount = selectedMerchants.reduce((total, merchant) => total + merchant.transactionCount, 0);
   function toggleMerchant(id) { selectedMerchantIds = selectedMerchantIds.includes(id) ? selectedMerchantIds.filter(value => value !== id) : [...selectedMerchantIds, id]; mergeNotice = ''; }
-  function openMerge() { if (selectedMerchants.length < 2) return; selectedMerchant = selectedMerchants[0].id; showMergeModal = true; }
+  function openMerge() { if (selectedMerchants.length < 2) return; preferredMerchantName = selectedMerchants[0].name; showMergeModal = true; }
   function closeMerge() { showMergeModal = false; }
-  function confirmMerge() { const merchant = merchantsForMerge.find(item => item.id === Number(selectedMerchant)); mergeNotice = `${selectedTransactionCount} transactions are now grouped under ${merchant?.name}.`; selectedMerchantIds = []; closeMerge(); }
+  function confirmMerge() { const name = preferredMerchantName.trim(); if (!name) return; mergeNotice = `${selectedTransactionCount} transactions are now grouped under ${name}.`; selectedMerchantIds = []; closeMerge(); }
 
   async function loadScreen() {
     status = 'loading'; error = '';
@@ -123,15 +123,10 @@
   <div class="modal-backdrop normalization-modal-backdrop">
     <div class="modal merge-modal" role="dialog" aria-modal="true" aria-labelledby="merge-modal-title" tabindex="-1">
       <button class="close" type="button" on:click={closeMerge}>×</button><p class="micro-label">MERGE {selectedMerchants.length} MERCHANT NAMES</p><h2 id="merge-modal-title">Choose the name to keep</h2>
-      <p class="merge-modal-copy">All {selectedTransactionCount} selected transactions will use this name. The others will remain as aliases.</p>
-      <div class="merge-label-options" role="radiogroup" aria-label="Choose the merchant name to keep">
-        {#each selectedMerchants as merchant}
-          <button class:selected={Number(selectedMerchant) === merchant.id} type="button" role="radio" aria-checked={Number(selectedMerchant) === merchant.id} on:click={() => selectedMerchant = merchant.id}>
-            <span class="merge-label-icon">{merchant.icon}</span><span><strong>{merchant.name}</strong><small>{merchant.transactionCount} transactions</small></span><span class="radio-dot"></span>
-          </button>
-        {/each}
-      </div>
-      <div class="modal-actions"><button class="secondary" type="button" on:click={closeMerge}>Cancel</button><button class="primary" type="button" on:click={confirmMerge}>Merge merchants</button></div>
+      <p class="merge-modal-copy">Enter one name to use across all {selectedTransactionCount} selected transactions. The selected labels will remain as aliases.</p>
+      <label class="merge-name-field">Preferred merchant name<input bind:value={preferredMerchantName} placeholder="e.g. HDFC Bank" autocomplete="off" /></label>
+      <div class="merge-modal-selected"><span>Selected names</span><p>{selectedMerchants.map(merchant => merchant.name).join(' · ')}</p></div>
+      <div class="modal-actions"><button class="secondary" type="button" on:click={closeMerge}>Cancel</button><button class="primary" type="button" disabled={!preferredMerchantName.trim()} on:click={confirmMerge}>Merge merchants</button></div>
     </div>
   </div>
 {/if}

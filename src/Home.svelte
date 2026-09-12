@@ -4,7 +4,7 @@
   import Normalization from './Normalization.svelte';
   export let calendarSection; export let recentSection; export let storiesSection; export let selectedMonth; export let onMonthChange; export let refreshCalendar; export let refreshRecent; export let refreshStories; export let onLogout;
 
-  let activeView = 'calendar', selectedDay = null, activityTab = 'recent', dayItems = [], dayStatus = 'idle', dayError = '', showAll = false, expandedId = null;
+  let showNormalization = false, selectedDay = null, activityTab = 'recent', dayItems = [], dayStatus = 'idle', dayError = '', showAll = false, expandedId = null;
   let openedStory = null, handoff = null, addingContext = false, actionError = '', loggingOut = false, signOutError = '';
   let storySlide = 0, storyTouchStart = null, showStoryEvidence = false, viewedStoryIds = [], viewedStoryRevisions = {};
   let editing = null, editAmount = '', editDate = '', editCategory = '', editSubcategory = '', editMerchantId = '', editAccountId = '', saving = false, deleting = null;
@@ -61,10 +61,6 @@
 <section class="top-greeting"><section class="app-heading"><div><p class="micro-label">{monthName(selectedMonth).toUpperCase()}</p><h1>{greeting()}</h1><p>Your recorded spending, one day at a time.</p></div><button class="profile-button" on:click={signOut} disabled={loggingOut} aria-label="Sign out">{loggingOut?'…':'D'}</button></section>{#if signOutError}<div class="notice error">{signOutError}</div>{/if}</section>
 <div class="top-story-rail"><SectionState section={storiesSection} title="Money Stories" retry={refreshStories}><section class="story-rail-section"><div class="section-title"><div><p class="micro-label">MONEY CHAPTERS</p><h2>{monthLabel(selectedMonth)} patterns</h2></div><span>{stories.length} stories</span></div><div class="chapter-shelf" aria-label="Money Chapters">{#each stories as story}{@const face = storyCardFace(story)}<button class:viewed={storyWasViewed(story)} class={`money-chapter ${storyTone(story)}`} on:click={()=>openStory(story)}><span class="chapter-marks" aria-label={`${story.cards?.length || 1} chapters`}>{#each Array(story.cards?.length || 1) as _}<i></i>{/each}</span><strong>{face.heading}</strong><b>{face.displayValue}</b>{#if storyWasUpdated(story)}<small class="story-updated">Updated</small>{/if}</button>{:else}<div class="story-rail-empty">No stories were created for this month.</div>{/each}</div></section></SectionState></div>
 <div class="workspace-divider" aria-hidden="true"><span>YOUR SPENDING LOG</span></div>
-<nav class="primary-view-nav" aria-label="Main sections"><button class:active={activeView==='calendar'} on:click={()=>activeView='calendar'}><span>▦</span> Calendar</button><button class:active={activeView==='normalization'} on:click={()=>activeView='normalization'}><span>≋</span> Normalization</button></nav>
-{#if activeView === 'normalization'}
-<main class="story-shell"><Normalization /></main>
-{:else}
 <main class="story-shell">
 {#if openedStory}<div class="story-reader-backdrop" role="presentation" on:click={()=>openedStory=null}><section class="story-detail" role="dialog" aria-modal="true" on:click|stopPropagation><button class="back-button" on:click={()=>openedStory=null}>← Back to stories</button><p class="micro-label">{storyName(openedStory)} · {openedStory.period?.displayLabel || monthLabel(selectedMonth)}</p>
 {#if hasDeck(openedStory)}
@@ -102,6 +98,19 @@
 {#if activityTab==='day'&&selected}<button class="wide-button add-missing" on:click={addMissingDate} disabled={addingContext}>{addingContext?'Preparing WhatsApp…':selected.transactionCount?`＋ Add something missing for ${selected.day} ${monthName(selectedMonth)}`:`＋ Record a transaction for ${selected.day} ${monthName(selectedMonth)}`}</button>{/if}{#if actionError}<p class="form-error" role="alert">{actionError}</p>{/if}{/if}</section>
 
  </main>
+
+<button class="account-repair-launcher" type="button" aria-haspopup="dialog" aria-expanded={showNormalization} aria-controls="account-repair-dialog" on:click={()=>showNormalization=true}>
+  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.7 6.3a5 5 0 0 0-6.4 6.4l-5.6 5.6a1.4 1.4 0 0 0 2 2l5.6-5.6a5 5 0 0 0 6.4-6.4l-3 3-2-2 3-3Z"/></svg>
+  <span><strong>Fix account names</strong><small>Edit, add or merge details</small></span>
+</button>
+
+{#if showNormalization}
+  <div class="account-repair-backdrop" role="presentation" on:click={()=>showNormalization=false}>
+    <div id="account-repair-dialog" class="account-repair-dialog" role="dialog" aria-modal="true" aria-labelledby="account-repair-title" tabindex="-1" on:click|stopPropagation on:keydown|stopPropagation>
+      <div class="account-repair-bar"><div><span class="repair-symbol" aria-hidden="true">🔧</span><div><p>ACCOUNT REPAIR</p><strong id="account-repair-title">Fix names and details</strong></div></div><button type="button" aria-label="Close account repair" on:click={()=>showNormalization=false}>×</button></div>
+      <div class="account-repair-content"><Normalization /></div>
+    </div>
+  </div>
 {/if}
 
 {#if editing}<div class="modal-backdrop"><div class="modal" role="dialog" aria-modal="true"><button class="close" on:click={()=>editing=null}>×</button><p class="micro-label">QUICK EDIT</p><h2>{merchant(editing)}</h2><label>Amount<input type="number" inputmode="decimal" min="0.01" step="0.01" bind:value={editAmount}/></label><label>Transaction date<input type="date" max={new Date().toISOString().slice(0,10)} bind:value={editDate}/></label>{#if optionsStatus==='loading'}<p class="edit-options-status">Loading categories, merchants, and accounts…</p>{:else if optionsStatus==='error'}<p class="form-error" role="alert">{optionsError}</p>{:else}<label>Category<select value={editCategory} on:change={changeEditCategory}><option value="" disabled>Select a category</option>{#each editOptions.categories as option}<option value={option.name}>{option.name}</option>{/each}</select></label><label>Subcategory<select bind:value={editSubcategory} disabled={!editCategory}><option value="" disabled>Select a subcategory</option>{#each editSubcategories as option}<option value={option}>{option}</option>{/each}</select></label><label>Merchant<select bind:value={editMerchantId}><option value="" disabled>Select a merchant</option>{#each editOptions.merchants as option}<option value={String(option.id)}>{option.name}</option>{/each}</select></label><label>Source account<select bind:value={editAccountId}><option value="" disabled>Select an account</option>{#each editOptions.accounts as option}<option value={String(option.id)}>{option.name}</option>{/each}</select></label>{/if}{#if actionError}<p class="form-error" role="alert">{actionError}</p>{/if}<div class="modal-actions"><button class="secondary" on:click={()=>editing=null}>Cancel</button><button class="primary" on:click={saveEdit} disabled={saving||optionsStatus!=='ready'||!editDate||Number(editAmount)<=0||!editCategory||!editSubcategory||!editMerchantId||!editAccountId}>{saving?'Saving…':'Save changes'}</button></div></div></div>{/if}

@@ -65,7 +65,7 @@
 
 <section class="normalization-page">
   <div class="normalization-heading">
-    <div><p class="micro-label">YOUR LANGUAGE</p><h1>Normalization</h1><p>Teach Money Stories the names you use for merchants, beneficiaries, and accounts.</p></div>
+    <div><p class="micro-label">FIX YOUR ACCOUNTS</p><h1>Account repair</h1><p>Edit, add, or merge merchant, beneficiary, and account names so your records stay clean and consistent.</p></div>
     <button class="add-normalization" type="button" aria-label="Add reference preference" on:click={openCreate} disabled={status !== 'ready' || !entityTypes.length}>＋</button>
   </div>
 

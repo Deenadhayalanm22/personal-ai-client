@@ -2,7 +2,7 @@
   import { ApiError, createMissingDateContext, deleteExpense, getExpenseOptions, getExpensesForDate, logout, updateExpense } from './lib/api.js';
   import SectionState from './SectionState.svelte';
   import Normalization from './Normalization.svelte';
-  export let calendarSection; export let recentSection; export let storiesSection; export let selectedMonth; export let onMonthChange; export let refreshCalendar; export let refreshRecent; export let refreshStories; export let onLogout;
+  export let calendarSection; export let recentSection; export let storiesSection; export let selectedMonth; export let connectionStatus; export let cacheUpdatedAt; export let onMonthChange; export let refreshCalendar; export let refreshRecent; export let refreshStories; export let onRetryConnection; export let onLogout;
 
   let view='home', showMoney=false, showNormalization=false, selectedDay=null, activityTab='recent', dayItems=[], dayStatus='idle', showAll=false, expandedId=null;
   let openedStory=null, handoff=null, addingContext=false, actionError='', loggingOut=false, signOutError='', storySlide=0, storyTouchStart=null, showStoryEvidence=false, storyFilter='All';
@@ -21,6 +21,7 @@
   const monthLabel=value=>{const[y,m]=value.split('-').map(Number);return new Intl.DateTimeFormat(undefined,{month:'long',year:'numeric'}).format(new Date(y,m-1));};
   const greeting=()=>new Date().getHours()<12?'Good morning':new Date().getHours()<17?'Good afternoon':'Good evening'; const isoDate=day=>`${selectedMonth}-${String(day).padStart(2,'0')}`;
   const hasDeck=story=>Array.isArray(story.cards)&&story.cards.length>0; const storyName=story=>String(story.storyType||story.type||'Money story').replaceAll('_',' '); const storyTone=story=>story.cardFace?.theme||'calm'; const storyCardFace=story=>story.cardFace||{heading:'Money story',displayValue:'View',theme:'calm'}; const storySource=story=>story.source||story.domain||'Spending';
+  $: connectionLabel=connectionStatus==='online'?'Online':connectionStatus==='offline'?'Offline':'Checking';
   function localInputDate(value){if(!value)return '';const text=String(value);if(/^\d{4}-\d{2}-\d{2}$/.test(text))return text;const date=new Date(text);return Number.isNaN(date.getTime())?text.slice(0,10):`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;}
   function navigate(next){view=next;if(next!=='transactions'){selectedDay=null;activityTab='recent';}window.scrollTo({top:0,behavior:'smooth'});}
   function currentLocalMonth(){const now=new Date();return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;}
@@ -39,8 +40,9 @@
   async function signOut(){loggingOut=true;try{await logout();onLogout();}catch{loggingOut=false;signOutError='Could not sign out.';}}
 </script>
 
-<header class="portal-topbar"><button class="wordmark" on:click={()=>navigate('home')}><span>₹</span>Money Stories</button><button class="profile-button" on:click={()=>navigate('you')} aria-label="Open your profile">D</button></header>
+<header class="portal-topbar"><button class="wordmark" on:click={()=>navigate('home')}><span>₹</span>Money Stories</button><div class="topbar-actions"><button class:online={connectionStatus==='online'} class:offline={connectionStatus==='offline'} class="connection-status" on:click={onRetryConnection} aria-label={`Connection status: ${connectionLabel}. Check again.`}><i></i>{connectionLabel}</button><button class="profile-button" on:click={()=>navigate('you')} aria-label="Open your profile">D</button></div></header>
 <main class="app-shell">
+{#if connectionStatus==='offline'}<section class="offline-notice"><span>◌</span><div><strong>{cacheUpdatedAt?'Showing your last saved view':'You’re offline'}</strong><p>{cacheUpdatedAt?'We’ll refresh automatically when the service is back.':'Your layout is ready. Connect once to load your expenses and stories.'}</p></div><button on:click={onRetryConnection}>Retry</button></section>{/if}
 {#if view==='home'}
   <section class="app-heading"><div><p class="micro-label">{monthLabel(selectedMonth).toUpperCase()}</p><h1>{greeting()}</h1><p>Here’s how your month is unfolding.</p></div></section>
   <SectionState section={calendarSection} title="Spending overview" retry={refreshCalendar}><button class="spending-hero" on:click={()=>navigate('transactions')}><span>MONTHLY SPENDING</span><strong>{money(data.totalSpend)} <small>spent</small></strong><b>{data.transactionCount||0} transactions · View transactions →</b></button></SectionState>

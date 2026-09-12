@@ -1,4 +1,5 @@
 export const API_URL = (import.meta.env.VITE_API_BASE || 'http://localhost:8080').replace(/\/$/, '');
+const HEALTH_PATH = import.meta.env.VITE_HEALTH_PATH || '/health';
 
 export class ApiError extends Error {
   constructor(message, status, data = null) { super(message); this.name = 'ApiError'; this.status = status; this.data = data; }
@@ -29,6 +30,8 @@ export async function exchangeMagicLink(token) {
 }
 
 export const getSession = () => request('/api/web/auth/session', {}, false);
+// Health is deliberately public: startup uses it before attempting authenticated data refreshes.
+export const getHealth = () => request(HEALTH_PATH, {}, false);
 export const requestLoginLink = (phoneNumber) => request('/api/web/auth/login-link', { method: 'POST', body: JSON.stringify({ phoneNumber }) }, false);
 export const logout = () => request('/api/web/auth/logout', { method: 'POST' }, false);
 

@@ -1,9 +1,9 @@
 <script>
-  import { createReferencePreference, getReferenceEntityTypes, getReferencePreferences } from './lib/api.js';
+  import { createReferencePreference, getReferenceEntityTypes, getReferencePreferences, mergeReferencePreferences } from './lib/api.js';
 
   let status = 'loading', error = '', entityTypes = [], savedPreferences = [];
   let expanded = null, showModal = false, saving = false, formError = '';
-  let selectedMerchantIds = [], preferredMerchantName = '', showMergeModal = false, mergeNotice = '';
+  let selectedMerchantIds = [], preferredMerchantName = '', showMergeModal = false, mergeNotice = '', merging = false, mergeError = '';
   let entityType = '', primaryReference = '', alias = '';
 
   const labels = { MERCHANT: 'Merchant', BENEFICIARY: 'Beneficiary', ACCOUNT: 'Account' };
@@ -11,20 +11,26 @@
   const typeLabel = type => labels[type] || type.replaceAll('_', ' ').toLowerCase().replace(/^./, value => value.toUpperCase());
   const aliasesFor = item => (item.aliases || []).map(value => typeof value === 'string' ? value : value.alias).filter(Boolean);
   const preferencesFrom = data => Array.isArray(data) ? data : (data?.references || data?.referencePreferences || data?.preferences || data?.items || []);
-  const merchantsForMerge = [
-    { id: 101, name: 'HDFC Bank account', entityType: 'ACCOUNT', transactionCount: 9, icon: 'H' },
-    { id: 214, name: 'HDFC UPI', entityType: 'ACCOUNT', transactionCount: 6, icon: 'U' },
-    { id: 319, name: 'Bank account', entityType: 'ACCOUNT', transactionCount: 3, icon: 'B' },
-    { id: 408, name: 'Swiggy', entityType: 'MERCHANT', transactionCount: 5, icon: 'S' },
-    { id: 452, name: 'Swiggy Instamart', entityType: 'MERCHANT', transactionCount: 2, icon: 'S' }
-  ];
+  $: merchantsForMerge = savedPreferences
+    .filter(item => item.referenceId != null && item.status !== 'INACTIVE' && item.status !== 'MERGED')
+    .map(item => ({ id: item.referenceId, name: item.primaryReference, entityType: item.entityType, transactionCount: Number(item.transactionCount || 0), icon: icons[item.entityType] || item.primaryReference?.[0]?.toUpperCase() || 'R' }));
   $: selectedMerchants = merchantsForMerge.filter(merchant => selectedMerchantIds.includes(merchant.id));
   $: selectedTransactionCount = selectedMerchants.reduce((total, merchant) => total + merchant.transactionCount, 0);
   $: selectedEntityType = selectedMerchants[0]?.entityType || '';
   function toggleMerchant(id) { selectedMerchantIds = selectedMerchantIds.includes(id) ? selectedMerchantIds.filter(value => value !== id) : [...selectedMerchantIds, id]; mergeNotice = ''; }
-  function openMerge() { if (selectedMerchants.length < 2) return; preferredMerchantName = selectedMerchants[0].name; showMergeModal = true; }
-  function closeMerge() { showMergeModal = false; }
-  function confirmMerge() { const name = preferredMerchantName.trim(); if (!name) return; mergeNotice = `${selectedTransactionCount} transactions are now grouped under ${name}.`; selectedMerchantIds = []; closeMerge(); }
+  function openMerge() { if (selectedMerchants.length < 2) return; preferredMerchantName = selectedMerchants[0].name; mergeError = ''; showMergeModal = true; }
+  function closeMerge() { if (!merging) showMergeModal = false; }
+  async function confirmMerge() {
+    const name = preferredMerchantName.trim(); if (!name || merging) return;
+    merging = true; mergeError = '';
+    try {
+      const result = await mergeReferencePreferences({ entityType: selectedEntityType, referenceIds: selectedMerchantIds, canonicalName: name });
+      const transactionCount = result?.updatedTransactionCount ?? selectedTransactionCount;
+      mergeNotice = `${transactionCount} transactions are now grouped under ${result?.canonicalReference?.name || name}.`;
+      selectedMerchantIds = []; showMergeModal = false; await refreshPreferences();
+    } catch (cause) { mergeError = cause?.message || 'Could not merge these references.'; }
+    finally { merging = false; }
+  }
 
   async function loadScreen() {
     status = 'loading'; error = '';
@@ -75,6 +81,7 @@
         </label>
       {/each}
     </div>
+    {#if !merchantsForMerge.length && status === 'ready'}<p class="merge-type-note">Add at least two references of the same type before merging them.</p>{/if}
     <div class="merge-selection-footer"><span>{selectedMerchants.length ? `${selectedMerchants.length} ${selectedEntityType.toLowerCase()} names · ${selectedTransactionCount} transactions selected` : 'Select at least two names to merge'}</span><button class="merge-button" type="button" disabled={selectedMerchants.length < 2} on:click={openMerge}>Merge selected</button></div>
     {#if selectedEntityType}<p class="merge-type-note">You’re selecting {selectedEntityType.toLowerCase()} references. Deselect them before choosing a different reference type.</p>{/if}
     {#if mergeNotice}<p class="merge-success" role="status">✓ {mergeNotice}</p>{/if}
@@ -126,9 +133,10 @@
     <div class="modal merge-modal" role="dialog" aria-modal="true" aria-labelledby="merge-modal-title" tabindex="-1">
       <button class="close" type="button" on:click={closeMerge}>×</button><p class="micro-label">MERGE {selectedMerchants.length} {selectedEntityType} NAMES</p><h2 id="merge-modal-title">Choose the name to keep</h2>
       <p class="merge-modal-copy">Enter one name to use across all {selectedTransactionCount} selected transactions. The selected labels will remain as aliases.</p>
-      <label class="merge-name-field">Preferred merchant name<input bind:value={preferredMerchantName} placeholder="e.g. HDFC Bank" autocomplete="off" /></label>
+      <label class="merge-name-field">Preferred {typeLabel(selectedEntityType).toLowerCase()} name<input bind:value={preferredMerchantName} placeholder="e.g. HDFC Bank" autocomplete="off" /></label>
       <div class="merge-modal-selected"><span>Selected names</span><p>{selectedMerchants.map(merchant => merchant.name).join(' · ')}</p></div>
-      <div class="modal-actions"><button class="secondary" type="button" on:click={closeMerge}>Cancel</button><button class="primary" type="button" disabled={!preferredMerchantName.trim()} on:click={confirmMerge}>Merge merchants</button></div>
+      {#if mergeError}<p class="form-error" role="alert">{mergeError}</p>{/if}
+      <div class="modal-actions"><button class="secondary" type="button" on:click={closeMerge} disabled={merging}>Cancel</button><button class="primary" type="button" disabled={merging || !preferredMerchantName.trim()} on:click={confirmMerge}>{merging ? 'Merging…' : `Merge ${typeLabel(selectedEntityType).toLowerCase()}s`}</button></div>
     </div>
   </div>
 {/if}

@@ -9,6 +9,11 @@
   let editing=null, editAmount='', editDate='', editCategory='', editSubcategory='', editMerchantId='', editAccountId='', saving=false, deleting=null;
   let editOptions={categories:[],merchants:[],accounts:[]}, optionsStatus='idle', optionsError='';
   let storyControls={spending:true,investments:true,planning:true};
+  let showLoanForm=false, loanError='';
+  let loanForm={name:'',principal:'',emi:'',tenure:'',firstEmiDate:'',bank:''};
+  const loanStorageKey='money-stories.mock-loans.v1';
+  const sampleLoans=[{id:'sample-home',name:'Home loan',principal:4200000,emi:38600,tenure:240,firstEmiDate:'2024-04-05',bank:'HDFC Bank'},{id:'sample-car',name:'Car loan',principal:850000,emi:17800,tenure:60,firstEmiDate:'2025-01-10',bank:'ICICI Bank'}];
+  let loans=readLoans();
   $: data=calendarSection.data||{}; $: currency=data.currency||'INR'; $: calendar=buildCalendar(selectedMonth,data.days||[]);
   $: recentData=recentSection.data||{}; $: recentItems=(recentData.items||recentData.expenses||[]).slice(0,5);
   $: storyData=storiesSection.data||{}; $: stories=storyData.stories||storyData.moneyStories||storyData.storyCards||[];
@@ -25,6 +30,10 @@
   $: evidenceItems=evidenceFor(openedStory);
   function localInputDate(value){if(!value)return '';const text=String(value);if(/^\d{4}-\d{2}-\d{2}$/.test(text))return text;const date=new Date(text);return Number.isNaN(date.getTime())?text.slice(0,10):`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;}
   function evidenceFor(story){const evidence=story?.evidence;const raw=Array.isArray(evidence)?evidence:evidence?.transactions||evidence?.items||story?.transactions||[];return raw.map(item=>({merchant:item.merchantLabel||item.merchant||item.merchantName||item.description||'Expense',category:item.categoryLabel||item.category?.name||item.category||'Uncategorised',date:item.dateLabel||dateLabel(item.transactionDate||item.transactionTime||item.date),amount:item.amount?.displayValue||item.displayAmount||money(item.amount)}));}
+  function readLoans(){try{const saved=JSON.parse(localStorage.getItem(loanStorageKey)||'null');return Array.isArray(saved)&&saved.length?saved:sampleLoans;}catch{return sampleLoans;}}
+  function saveLoans(){try{localStorage.setItem(loanStorageKey,JSON.stringify(loans));}catch{}}
+  function openLoanForm(){loanError='';loanForm={name:'',principal:'',emi:'',tenure:'',firstEmiDate:'',bank:''};showLoanForm=true;}
+  function saveLoan(){const principal=Number(loanForm.principal),emi=Number(loanForm.emi),tenure=Number(loanForm.tenure);if(!loanForm.name.trim()||!loanForm.bank.trim()||!loanForm.firstEmiDate||principal<=0||emi<=0||tenure<=0){loanError='Complete every loan detail to add it.';return;}loans=[...loans,{id:`loan-${Date.now()}`,name:loanForm.name.trim(),principal,emi,tenure,firstEmiDate:loanForm.firstEmiDate,bank:loanForm.bank.trim()}];saveLoans();showLoanForm=false;}
   function navigate(next){view=next;if(next!=='transactions'){selectedDay=null;activityTab='recent';}window.scrollTo({top:0,behavior:'smooth'});}
   function currentLocalMonth(){const now=new Date();return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;}
   function changeMonth(offset){const[y,m]=selectedMonth.split('-').map(Number),next=new Date(Date.UTC(y,m-1+offset,1)).toISOString().slice(0,7);if(next<=currentLocalMonth()){selectedDay=null;dayItems=[];activityTab='recent';onMonthChange(next);}}
@@ -65,7 +74,26 @@
 <nav class="bottom-nav" aria-label="Main navigation">{#each [['home','⌂','Home'],['transactions','▤','Transactions'],['stories','▱','Stories'],['you','♙','You']] as item}<button class:active={view===item[0]} on:click={()=>navigate(item[0])}><span>{item[1]}</span>{item[2]}</button>{/each}</nav>
 
 <!-- svelte-ignore a11y_click_events_have_key_events -->
-{#if showMoney}<div class="modal-backdrop" on:click={()=>showMoney=false} on:keydown={(event)=>event.key==='Escape'&&(showMoney=false)} role="presentation"><section class="modal money-modal" on:click|stopPropagation role="dialog" aria-modal="true" tabindex="-1"><button class="close" on:click={()=>showMoney=false}>×</button><p class="micro-label">OPTIONAL, PRIVATE, YOURS</p><h2>Build your complete money picture</h2><p class="module-reassurance">You choose what to add. Nothing is required, and you can remove a module anytime.</p>{#each [['↗','Investments','Stocks and mutual funds'],['◒','Emergency fund','Track your safety cushion'],['◎','Goals','Plan for what matters'],['▤','Budgets','Set gentle spending limits']] as module}<button class="module-row" on:click={()=>showMoney=false}><span>{module[0]}</span><div><strong>{module[1]}</strong><small>{module[2]}</small></div><b>Coming soon</b></button>{/each}<p class="module-footnote">These modules use normal forms—not AI cleanup—and only inform stories if you turn that on.</p></section></div>{/if}
+{#if showMoney}
+  <div class="modal-backdrop" on:click={()=>showMoney=false} on:keydown={(event)=>event.key==='Escape'&&(showMoney=false)} role="presentation">
+    <section class="modal money-modal" on:click|stopPropagation role="dialog" aria-modal="true" tabindex="-1">
+      <button class="close" on:click={()=>showMoney=false}>×</button>
+      <p class="micro-label">OPTIONAL, PRIVATE, YOURS</p><h2>Build your complete money picture</h2>
+      <p class="module-reassurance">You choose what to add. Nothing is required, and you can remove a module anytime.</p>
+      {#each [['↗','Investments','Stocks and mutual funds'],['◒','Emergency fund','Track your safety cushion'],['◎','Goals','Plan for what matters'],['▤','Budgets','Set gentle spending limits']] as module}
+        <button class="module-row" on:click={()=>showMoney=false}><span>{module[0]}</span><div><strong>{module[1]}</strong><small>{module[2]}</small></div><b>Coming soon</b></button>
+      {/each}
+      <section class="loans-module"><div class="loans-heading"><div><strong>Loans</strong><small>Track repayments and monthly commitments</small></div><button class="loan-add" on:click={openLoanForm} aria-label="Add a loan">＋</button></div>
+        {#each loans as loan}<article class="loan-row"><span>₹</span><div><strong>{loan.name}</strong><small>{loan.bank} · {loan.tenure} months · first EMI {dateLabel(loan.firstEmiDate)}</small></div><div><b>{money(loan.emi)}/mo</b><small>{money(loan.principal)} principal</small></div></article>{/each}
+        <button class="add-loan-row" on:click={openLoanForm}>＋ Add another loan</button>
+      </section>
+      <p class="module-footnote">These modules use normal forms—not AI cleanup—and only inform stories if you turn that on.</p>
+    </section>
+  </div>
+{/if}
+{#if showLoanForm}
+  <div class="modal-backdrop loan-form-backdrop" role="presentation"><section class="modal loan-form" role="dialog" aria-modal="true" tabindex="-1"><button class="close" on:click={()=>showLoanForm=false}>×</button><p class="micro-label">LOAN DETAILS</p><h2>Add a loan</h2><p class="module-reassurance">For now, this is mock data saved in this browser for preview and deployment.</p><label>Loan name<input bind:value={loanForm.name} placeholder="e.g. Home loan" /></label><label>Original loan principal<input type="number" inputmode="decimal" min="1" bind:value={loanForm.principal} placeholder="e.g. 4200000" /></label><label>Monthly EMI amount<input type="number" inputmode="decimal" min="1" bind:value={loanForm.emi} placeholder="e.g. 38600" /></label><label>Total tenure in months<input type="number" inputmode="numeric" min="1" bind:value={loanForm.tenure} placeholder="e.g. 240" /></label><label>First EMI due date<input type="date" bind:value={loanForm.firstEmiDate} /></label><label>Bank<input bind:value={loanForm.bank} placeholder="e.g. HDFC Bank" /></label>{#if loanError}<p class="form-error">{loanError}</p>{/if}<div class="modal-actions"><button class="secondary" on:click={()=>showLoanForm=false}>Cancel</button><button class="primary" on:click={saveLoan}>Add loan</button></div></section></div>
+{/if}
 <!-- svelte-ignore a11y_click_events_have_key_events -->
 {#if showNormalization}<div class="account-repair-backdrop" role="presentation" on:click={()=>showNormalization=false} on:keydown={(event)=>event.key==='Escape'&&(showNormalization=false)}><section class="account-repair-dialog" role="dialog" aria-modal="true" tabindex="-1" on:click|stopPropagation><header class="account-repair-bar"><div><span class="repair-symbol">✦</span><span><p>EXPENSE DATA ONLY</p><strong>Expense cleanup</strong></span></div><button on:click={()=>showNormalization=false}>×</button></header><div class="account-repair-content"><Normalization /></div></section></div>{/if}
 <!-- svelte-ignore a11y_click_events_have_key_events -->

@@ -23,6 +23,14 @@
   const transactionTitle = item => [category(item), subcategory(item), merchant(item)].filter(Boolean).join(' · ');
   const userMessage = item => item.originalMessage || item.message || item.description || '';
   const transactionDate = item => item.transactionDate || item.transactionTime || item.date;
+  function localInputDate(value) {
+    if (!value) return '';
+    const text = String(value);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
+    const date = new Date(text);
+    if (Number.isNaN(date.getTime())) return text.slice(0, 10);
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  }
   function dateLabel(value) { return value ? new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'long' }).format(new Date(value)) : ''; }
   function monthName(value) { const [y,m] = value.split('-').map(Number); return new Intl.DateTimeFormat(undefined,{month:'long'}).format(new Date(y,m-1)); }
   function monthLabel(value) { const [y,m] = value.split('-').map(Number); return new Intl.DateTimeFormat(undefined,{month:'long',year:'numeric'}).format(new Date(y,m-1)); }
@@ -46,7 +54,7 @@
   function switchTab(tab){activityTab=tab;expandedId=null;showAll=false;}
   function currentLocalMonth(){const now=new Date();return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;}
   function changeMonth(offset){const[y,m]=selectedMonth.split('-').map(Number),next=new Date(Date.UTC(y,m-1+offset,1)).toISOString().slice(0,7);if(next<=currentLocalMonth()){selectedDay=null;dayItems=[];activityTab='recent';onMonthChange(next)}}
-  async function startEdit(item){editing=item;editAmount=String(item.amount??'');editDate=String(transactionDate(item)||'').slice(0,10);editCategory=category(item)==='Uncategorised'?'':category(item);editSubcategory=subcategory(item);editMerchantId=String(item.merchantId??item.merchant?.id??'');editAccountId=String(item.accountId??item.account?.id??item.sourceAccountId??item.sourceAccount?.id??'');actionError='';optionsError='';if(optionsStatus==='ready'){selectCurrentReferences(item);return}optionsStatus='loading';try{const result=await getExpenseOptions();editOptions={categories:result.categories||[],merchants:result.merchants||[],accounts:result.accounts||[]};optionsStatus='ready';selectCurrentReferences(item)}catch(cause){optionsStatus='error';optionsError=cause?.message||'Could not load edit options.';}}
+  async function startEdit(item){editing=item;editAmount=String(item.amount??'');editDate=localInputDate(transactionDate(item));editCategory=category(item)==='Uncategorised'?'':category(item);editSubcategory=subcategory(item);editMerchantId=String(item.merchantId??item.merchant?.id??'');editAccountId=String(item.accountId??item.account?.id??item.sourceAccountId??item.sourceAccount?.id??'');actionError='';optionsError='';if(optionsStatus==='ready'){selectCurrentReferences(item);return}optionsStatus='loading';try{const result=await getExpenseOptions();editOptions={categories:result.categories||[],merchants:result.merchants||[],accounts:result.accounts||[]};optionsStatus='ready';selectCurrentReferences(item)}catch(cause){optionsStatus='error';optionsError=cause?.message||'Could not load edit options.';}}
   function selectCurrentMerchant(item){if(editMerchantId)return;const current=merchant(item).toLowerCase(),match=editOptions.merchants.find(option=>option.name?.toLowerCase()===current);if(match)editMerchantId=String(match.id)}
   function selectCurrentAccount(item){if(editAccountId)return;const current=String(item.account?.name??item.sourceAccount?.name??item.accountName??item.sourceAccountName??'').toLowerCase(),match=editOptions.accounts.find(option=>option.name?.toLowerCase()===current);if(match)editAccountId=String(match.id)}
   function selectCurrentReferences(item){selectCurrentMerchant(item);selectCurrentAccount(item)}

@@ -81,7 +81,7 @@
       {#each [['↗','Investments','Stocks and mutual funds'],['◒','Emergency fund','Track your safety cushion'],['◎','Goals','Plan for what matters'],['▤','Budgets','Set gentle spending limits']] as module}
         <button class="module-row" on:click={()=>showMoney=false}><span>{module[0]}</span><div><strong>{module[1]}</strong><small>{module[2]}</small></div><b>Coming soon</b></button>
       {/each}
-      <section class="loans-module"><div class="loans-heading"><div><strong>Loans</strong><small>Track repayments and monthly commitments</small></div><button class="loan-add" on:click={()=>openLoanForm()} aria-label="Add a loan">＋</button></div>
+      <section class="loans-module"><div class="loans-heading"><div><strong>Loans</strong><small>Track repayments and monthly commitments</small></div></div>
         {#if loanStatus==='loading'}<p class="loan-state">Loading your loans…</p>{:else if loanStatus==='error'}<div class="loan-state error"><span>{loanError}</span><button on:click={loadLoans}>Try again</button></div>{:else if loans.length}{#each loans as loan}<article class="loan-row"><span>₹</span><div><strong>{loan.loanName}</strong><small>{loan.lenderName} · {loan.loanType.replaceAll('_',' ')} · {loan.totalTenureMonths} months</small></div><div><b>{money(loan.monthlyEmiAmount)}/mo</b><small>{money(loan.originalPrincipal)} principal</small><button on:click={()=>openLoanForm(loan)}>Edit</button></div></article>{/each}{:else}<p class="loan-state">No loans added yet.</p>{/if}
         <button class="add-loan-row" on:click={()=>openLoanForm()}>＋ Add another loan</button>
       </section>

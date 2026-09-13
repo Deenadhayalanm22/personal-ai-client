@@ -8,6 +8,7 @@
   const now = new Date(), currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   let view = isPrivacyPage ? 'privacy' : 'dashboard', selectedMonth = monthFromUrl();
   let calendarSection = state(), recentSection = state(), storiesSection = state(), connectionStatus = 'checking', cacheUpdatedAt = null;
+  let connectionRequest = 0;
 
   function state(data = null) { return { status: data ? 'ready' : 'loading', data, error: '' }; }
   function monthFromUrl() { const value = new URLSearchParams(location.search).get('month'); return /^\d{4}-\d{2}$/.test(value || '') ? value : currentMonth; }
@@ -23,7 +24,21 @@
   async function loadCalendar() { calendarSection = { ...calendarSection, status: calendarSection.data ? 'refreshing' : 'loading', error: '' }; try { calendarSection = { status: 'ready', data: await getExpenseCalendar(selectedMonth), error: '' }; saveCache(); } catch (cause) { if (!(cause instanceof ApiError && cause.status === 401)) calendarSection = calendarSection.data ? { ...calendarSection, status: 'ready', error: '' } : unavailableSection(); } }
   async function loadRecent() { recentSection = { ...recentSection, status: recentSection.data ? 'refreshing' : 'loading', error: '' }; try { recentSection = { status: 'ready', data: await getRecentExpenses(selectedMonth, 5), error: '' }; saveCache(); } catch (cause) { if (!(cause instanceof ApiError && cause.status === 401)) recentSection = recentSection.data ? { ...recentSection, status: 'ready', error: '' } : unavailableSection(); } }
   async function loadStories() { storiesSection = { ...storiesSection, status: storiesSection.data ? 'refreshing' : 'loading', error: '' }; try { storiesSection = { status: 'ready', data: await getMoneyStories(selectedMonth), error: '' }; saveCache(); } catch (cause) { if (!(cause instanceof ApiError && cause.status === 401)) storiesSection = storiesSection.data ? { ...storiesSection, status: 'ready', error: '' } : unavailableSection(); } }
-  async function refreshWhenOnline() { connectionStatus = 'checking'; try { await getHealth(); connectionStatus = 'online'; await Promise.allSettled([loadCalendar(), loadRecent(), loadStories()]); } catch { connectionStatus = 'offline'; if (!calendarSection.data && !recentSection.data && !storiesSection.data) emptyFirstRun(); } }
+  async function refreshWhenOnline() {
+    const requestId = ++connectionRequest;
+    connectionStatus = navigator.onLine ? 'checking' : 'offline';
+    if (!navigator.onLine) { if (!calendarSection.data && !recentSection.data && !storiesSection.data) emptyFirstRun(); return; }
+    try {
+      await getHealth();
+      if (requestId !== connectionRequest) return;
+      connectionStatus = 'online';
+      await Promise.allSettled([loadCalendar(), loadRecent(), loadStories()]);
+    } catch {
+      if (requestId !== connectionRequest) return;
+      connectionStatus = 'offline';
+      if (!calendarSection.data && !recentSection.data && !storiesSection.data) emptyFirstRun();
+    }
+  }
   function changeMonth(month, updateHistory = true) { selectedMonth = month; if (updateHistory) history.pushState({}, '', `/dashboard?month=${encodeURIComponent(month)}`); if (connectionStatus === 'online') { loadCalendar(); loadRecent(); loadStories(); } else { emptyFirstRun(); } }
   async function initialize() {
     if (isPrivacyPage) return;
@@ -32,7 +47,7 @@
     // The dashboard is intentionally cache-first. Do not call the session endpoint on startup.
     view = 'dashboard'; if (!readCache()) emptyFirstRun(); await refreshWhenOnline();
   }
-  onMount(() => { const auth = () => unauthorized(), pop = () => changeMonth(monthFromUrl(), false), online = () => refreshWhenOnline(), offline = () => connectionStatus = 'offline'; addEventListener('app:unauthorized', auth); addEventListener('popstate', pop); addEventListener('online', online); addEventListener('offline', offline); initialize(); return () => { removeEventListener('app:unauthorized', auth); removeEventListener('popstate', pop); removeEventListener('online', online); removeEventListener('offline', offline); }; });
+  onMount(() => { const auth = () => unauthorized(), pop = () => changeMonth(monthFromUrl(), false), online = () => refreshWhenOnline(), offline = () => { connectionRequest += 1; connectionStatus = 'offline'; }; addEventListener('app:unauthorized', auth); addEventListener('popstate', pop); addEventListener('online', online); addEventListener('offline', offline); initialize(); return () => { removeEventListener('app:unauthorized', auth); removeEventListener('popstate', pop); removeEventListener('online', online); removeEventListener('offline', offline); }; });
 </script>
 {#if view === 'privacy'}<PrivacyPolicy />
 {:else if view === 'login'}<Auth />

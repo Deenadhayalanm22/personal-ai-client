@@ -44,6 +44,10 @@ export const getExpensesForDate = (month, date, limit = 50) => request(`/api/web
 export const updateExpense = (id, changes) => request(`/api/web/expenses/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(changes) });
 export const deleteExpense = (id) => request(`/api/web/expenses/${encodeURIComponent(id)}`, { method: 'DELETE' });
 
+export const getLoans = () => request('/api/web/loans');
+export const createLoan = (loan) => request('/api/web/loans', { method: 'POST', body: JSON.stringify(loan) });
+export const updateLoan = (id, changes) => request(`/api/web/loans/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(changes) });
+
 let referenceEntityTypesCache = null;
 let referenceEntityTypesRequest = null;
 

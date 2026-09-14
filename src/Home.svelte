@@ -2,6 +2,9 @@
   import { ApiError, confirmSipOccurrence, createLoan, createMissingDateContext, createMutualFund, deleteExpense, getExpenseOptions, getExpensesForDate, getLoans, getMutualFund, getMutualFunds, logout, searchMutualFunds, updateExpense, updateLoan } from './lib/api.js';
   import SectionState from './SectionState.svelte';
   import Normalization from './Normalization.svelte';
+  import AppHeader from './components/AppHeader.svelte';
+  import BottomNav from './components/BottomNav.svelte';
+  import ProfileSettings from './features/profile/ProfileSettings.svelte';
   export let calendarSection; export let recentSection; export let storiesSection; export let selectedMonth; export let connectionStatus; export let cacheUpdatedAt; export let demoMode; export let onDemoModeChange; export let onMonthChange; export let refreshCalendar; export let refreshRecent; export let refreshStories; export let onRetryConnection; export let onLogout;
 
   let view='home', showMoney=false, showNormalization=false, selectedDay=null, activityTab='recent', dayItems=[], dayStatus='idle', showAll=false, expandedId=null;
@@ -73,7 +76,7 @@
   async function switchDemoMode(){if(demoSwitching)return;demoSwitching=true;demoError='';try{await onDemoModeChange(!demoMode);loans=[];mutualFunds=[];loanStatus='idle';mutualFundStatus='idle';fundDetail=null;dayItems=[];selectedDay=null;editOptions={categories:[],merchants:[],accounts:[]};optionsStatus='idle';showMoney=false;}catch(cause){demoError=cause?.message||'Could not switch profiles.';}finally{demoSwitching=false;}}
 </script>
 
-<header class="portal-topbar"><button class="wordmark" on:click={()=>navigate('home')}><span>₹</span>Money Stories</button><div class="topbar-actions"><button class:online={connectionStatus==='online'} class:offline={connectionStatus==='offline'} class="connection-status" on:click={onRetryConnection} aria-label={`Connection status: ${connectionLabel}. Check again.`}><i></i>{connectionLabel}</button><button class="profile-button" on:click={()=>navigate('you')} aria-label="Open your profile">D</button></div></header>
+<AppHeader {connectionStatus} {connectionLabel} onRetry={onRetryConnection} onHome={() => navigate('home')} onProfile={() => navigate('you')} />
 <main class="app-shell">
 {#if connectionStatus==='offline'}<section class="offline-notice"><span>◌</span><div><strong>{cacheUpdatedAt?'Showing your last saved view':'You’re offline'}</strong><p>{cacheUpdatedAt?'We’ll refresh automatically when the service is back.':'Your layout is ready. Connect once to load your expenses and stories.'}</p></div><button on:click={onRetryConnection}>Retry</button></section>{/if}
 {#if view==='home'}
@@ -90,10 +93,10 @@
 {:else if view==='stories'}
   <section class="workspace-heading"><div><p class="micro-label">YOUR MONEY, EXPLAINED</p><h1>Stories</h1><p>Insights across the information you choose to share.</p></div></section><div class="story-filters">{#each ['All','Spending','Investing','Planning'] as filter}<button class:active={storyFilter===filter} on:click={()=>storyFilter=filter}>{filter}</button>{/each}</div><SectionState section={storiesSection} title="Stories" retry={refreshStories}><div class="stories-feed">{#each filteredStories as story}<button class={`feed-story ${storyTone(story)}`} on:click={()=>openStory(story)}><span class="story-source">{storySource(story)}</span><strong>{storyCardFace(story).heading}</strong><b>{storyCardFace(story).displayValue}</b><i>›</i></button>{:else}<div class="empty-state"><span>✦</span><h2>No {storyFilter.toLowerCase()} stories yet</h2><p>As you choose to add more information, relevant stories will appear here.</p></div>{/each}</div></SectionState>
 {:else}
-  <section class="workspace-heading"><div><p class="micro-label">YOUR DATA, YOUR CHOICE</p><h1>You</h1><p>Control the information that informs your stories.</p></div></section><section class="settings-card"><p class="micro-label">YOUR DATA</p><button on:click={()=>navigate('transactions')}><span>▤</span><div><strong>Expense capture</strong><small>AI-captured expenses and cleanup</small></div><b>On ›</b></button><button on:click={openMoney}><span>↗</span><div><strong>Optional money modules</strong><small>Goals, investing, safety and budgets</small></div><b>Manage ›</b></button></section><section class="settings-card"><p class="micro-label">STORY CONTROLS</p>{#each [['spending','Use spending in stories'],['investments','Use investments in stories'],['planning','Use goals and budgets in stories']] as control}<label><span>{control[1]}</span><input type="checkbox" bind:checked={storyControls[control[0]]}/></label>{/each}</section><section class="settings-card"><p class="micro-label">PRESENTATION</p><label class="demo-mode-toggle"><span><strong>Demo mode</strong><small>Use a separate profile while presenting. Your real data stays hidden.</small></span><input type="checkbox" checked={demoMode} disabled={demoSwitching} on:change={switchDemoMode}/></label>{#if demoError}<p class="form-error">{demoError}</p>{/if}</section><section class="settings-card"><p class="micro-label">ACCOUNT</p><button on:click={signOut} disabled={loggingOut}><span>↪</span><div><strong>{loggingOut?'Signing out…':'Sign out'}</strong><small>End your secure session on this device</small></div><b>›</b></button>{#if signOutError}<p class="form-error">{signOutError}</p>{/if}</section>
+  <ProfileSettings {demoMode} {demoSwitching} {demoError} {loggingOut} {signOutError} {storyControls} onNavigate={navigate} onOpenMoney={openMoney} onDemoModeChange={switchDemoMode} onSignOut={signOut} />
 {/if}
 </main>
-<nav class="bottom-nav" aria-label="Main navigation">{#each [['home','⌂','Home'],['transactions','▤','Transactions'],['stories','▱','Stories'],['you','♙','You']] as item}<button class:active={view===item[0]} on:click={()=>navigate(item[0])}><span>{item[1]}</span>{item[2]}</button>{/each}</nav>
+<BottomNav {view} onNavigate={navigate} />
 
 <!-- svelte-ignore a11y_click_events_have_key_events -->
 {#if showMoney}

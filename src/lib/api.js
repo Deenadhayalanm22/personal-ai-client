@@ -55,6 +55,8 @@ export const deleteExpense = (id) => request(`/api/web/expenses/${encodeURICompo
 export const getLoans = () => request('/api/web/loans');
 export const createLoan = (loan) => request('/api/web/loans', { method: 'POST', body: JSON.stringify(loan) });
 export const updateLoan = (id, changes) => request(`/api/web/loans/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(changes) });
+export const getActions = () => request('/api/web/actions');
+export const completeAction = (id) => request(`/api/web/actions/${encodeURIComponent(id)}/complete`, { method: 'POST' });
 
 export const searchMutualFunds = (query) => request(`/api/web/mutual-funds/search?q=${encodeURIComponent(query)}`);
 export const getMutualFunds = () => request('/api/web/mutual-funds');

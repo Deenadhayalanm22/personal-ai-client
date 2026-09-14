@@ -31,6 +31,8 @@ export async function exchangeMagicLink(token) {
 }
 
 export const getSession = () => request('/api/web/auth/session', {}, false);
+export const getDemoMode = () => request('/api/web/auth/demo-profile');
+export const setDemoMode = (enabled) => request('/api/web/auth/demo-profile', { method: 'PUT', body: JSON.stringify({ enabled }) });
 // Health is deliberately public: startup uses it before attempting authenticated data refreshes.
 export async function getHealth() {
   const controller = new AbortController();
@@ -63,6 +65,11 @@ export const confirmSipOccurrence = (id, month, investment) => request(`/api/web
 
 let referenceEntityTypesCache = null;
 let referenceEntityTypesRequest = null;
+
+export function clearProfileCaches() {
+  referenceEntityTypesCache = null;
+  referenceEntityTypesRequest = null;
+}
 
 export async function getReferenceEntityTypes() {
   if (referenceEntityTypesCache) return referenceEntityTypesCache;
